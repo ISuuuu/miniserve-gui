@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from "vue";
+import { ref, reactive, onMounted, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ElMessage } from "element-plus";
@@ -257,6 +257,25 @@ function addLog(msg: string) {
   if (logs.value.length > 200) logs.value.shift();
 }
 
+// ============ Auto Save ============
+
+// 自动保存配置（防抖）
+let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+watch(
+  config,
+  () => {
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(async () => {
+      try {
+        await invoke("save_config", { config: { ...config } });
+      } catch (e) {
+        console.error("Auto save failed:", e);
+      }
+    }, 500);
+  },
+  { deep: true }
+);
+
 // ============ Lifecycle ============
 
 onMounted(async () => {
@@ -278,7 +297,27 @@ onMounted(async () => {
   <div class="app-container">
     <!-- Header -->
     <header class="app-header">
-      <h2>🖥️ miniserve GUI</h2>
+      <div class="header-left">
+        <div class="header-buttons">
+          <el-button 
+            type="success" 
+            :icon="VideoPlay" 
+            @click="startServer" 
+            :loading="loading"
+          >
+            {{ serverStatus?.running ? "重启" : "启动" }}
+          </el-button>
+          <el-button
+            v-if="serverStatus?.running"
+            type="danger"
+            :icon="VideoPause"
+            @click="stopServer"
+            :loading="loading"
+          >
+            停止
+          </el-button>
+        </div>
+      </div>
       <div class="header-actions">
         <el-tag v-if="engineStatus?.exists" type="success" size="small">
           ✅ 引擎已就绪 {{ engineStatus.version ? `(${engineStatus.version})` : "" }}
@@ -417,21 +456,7 @@ onMounted(async () => {
           </el-form-item>
         </el-form>
 
-        <div class="panel-actions">
-          <el-button type="success" :icon="VideoPlay" @click="startServer" :loading="loading">
-            {{ serverStatus?.running ? "重启服务" : "启动服务" }}
-          </el-button>
-          <el-button
-            v-if="serverStatus?.running"
-            type="danger"
-            :icon="VideoPause"
-            @click="stopServer"
-            :loading="loading"
-          >
-            停止服务
-          </el-button>
-          <el-button type="info" @click="saveConfig">💾 保存配置</el-button>
-        </div>
+
       </aside>
 
       <!-- Right Panel: QR + Logs -->
@@ -466,7 +491,6 @@ onMounted(async () => {
             <div class="qr-column">
               <div v-if="hoveredIdx !== null && qrCodes[hoveredIdx]" class="qr-display">
                 <img :src="qrCodes[hoveredIdx]" alt="QR" class="qr-img" />
-                <div class="qr-hint">{{ serverUrls[hoveredIdx] }}</div>
               </div>
               <div v-else class="qr-placeholder">
                 鼠标悬停地址查看二维码
@@ -589,11 +613,11 @@ onMounted(async () => {
 .url-layout {
   display: flex;
   gap: 16px;
-  min-height: 180px;
+  min-height: 120px;
 }
 
 .url-column {
-  flex: 1;
+  flex: 0 0 55%;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -609,6 +633,7 @@ onMounted(async () => {
   gap: 8px;
   font-size: 13px;
   transition: all 0.2s;
+  width: 100%;
 }
 
 .url-item .el-link {
@@ -625,15 +650,14 @@ onMounted(async () => {
 }
 
 .qr-column {
-  width: 200px;
-  min-height: 180px;
+  width: 120px;
+  min-height: 120px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   background: #fafafa;
   border-radius: 8px;
-  padding: 12px;
 }
 
 .qr-display {
@@ -641,8 +665,8 @@ onMounted(async () => {
 }
 
 .qr-display .qr-img {
-  width: 150px;
-  height: 150px;
+  width: 120px;
+  height: 120px;
 }
 
 .qr-hint {
@@ -685,7 +709,7 @@ onMounted(async () => {
   font-size: 12px;
   line-height: 1.6;
   overflow-y: auto;
-  max-height: 300px;
+  flex: 1;
 }
 
 .log-line {
