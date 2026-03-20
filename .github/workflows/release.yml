@@ -14,6 +14,8 @@ on:
 
 jobs:
   build:
+    permissions:  # 必须加上这一段，否则无法上传 Release 文件
+      contents: write
     strategy:
       fail-fast: false
       matrix:
