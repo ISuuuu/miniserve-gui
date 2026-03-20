@@ -51,7 +51,7 @@ const downloading = ref(false);
 const progress = ref(0);
 const loading = ref(false);
 const qrCodeUrl = ref("");
-const qrCodes = ref<(string | null)[]>([]);
+const qrCodes = ref<string[]>([]);
 const serverUrls = ref<string[]>([]);
 const logs = ref<string[]>([]);
 const copySuccess = ref(false);
@@ -132,12 +132,12 @@ async function loadConfig() {
   }
 }
 
+// 保存配置（自动保存使用）
 async function saveConfig() {
   try {
     await invoke("save_config", { config: { ...config } });
-    ElMessage.success("配置已保存");
   } catch (e) {
-    ElMessage.error("保存失败: " + e);
+    console.error("Save config failed:", e);
   }
 }
 
@@ -265,12 +265,8 @@ watch(
   config,
   () => {
     if (saveTimeout) clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(async () => {
-      try {
-        await invoke("save_config", { config: { ...config } });
-      } catch (e) {
-        console.error("Auto save failed:", e);
-      }
+    saveTimeout = setTimeout(() => {
+      saveConfig();
     }, 500);
   },
   { deep: true }
