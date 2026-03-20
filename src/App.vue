@@ -1,160 +1,630 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, reactive, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { ElMessage } from "element-plus";
+import { FolderOpened, Download, VideoPlay, VideoPause, Refresh, DocumentCopy, Link } from "@element-plus/icons-vue";
 
-const greetMsg = ref("");
-const name = ref("");
+// ============ Types ============
 
-async function greet() {
-  // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-  greetMsg.value = await invoke("greet", { name: name.value });
+interface EngineStatus {
+  exists: boolean;
+  version: string | null;
+  path: string;
 }
+
+interface ServerConfig {
+  path: string;
+  port: number;
+  interfaces: string;
+  auth_username: string;
+  auth_password: string;
+  upload: boolean;
+  mkdir: boolean;
+  media_controls: boolean;
+  color_scheme: string;
+  title: string;
+  hide_icons: boolean;
+  spa: boolean;
+  compress: string;
+  hidden: boolean;
+  thumbnails: boolean;
+}
+
+interface ServerStatus {
+  running: boolean;
+  pid: number | null;
+  url: string | null;
+  port: number | null;
+}
+
+interface QrResponse {
+  data: string;
+}
+
+// ============ State ============
+
+const engineStatus = ref<EngineStatus | null>(null);
+const serverStatus = ref<ServerStatus | null>(null);
+const downloading = ref(false);
+const progress = ref(0);
+const loading = ref(false);
+const qrCodeUrl = ref("");
+const logs = ref<string[]>([]);
+const copySuccess = ref(false);
+
+const config = reactive<ServerConfig>({
+  path: "",
+  port: 8080,
+  interfaces: "0.0.0.0",
+  auth_username: "",
+  auth_password: "",
+  upload: false,
+  mkdir: false,
+  media_controls: false,
+  color_scheme: "dark",
+  title: "miniserve",
+  hide_icons: false,
+  spa: false,
+  compress: "",
+  hidden: false,
+  thumbnails: false,
+});
+
+const colorSchemes = [
+  { label: "暗色 (dark)", value: "dark" },
+  { label: "亮色 (light)", value: "light" },
+  { label: "松鼠 (squirrel)", value: "squirrel" },
+];
+
+const compressOptions = [
+  { label: "无", value: "" },
+  { label: "gzip", value: "gzip" },
+  { label: "brotli (br)", value: "br" },
+  { label: "deflate", value: "deflate" },
+];
+
+const interfaceOptions = [
+  { label: "所有网卡 (0.0.0.0)", value: "0.0.0.0" },
+  { label: "本地回环 (127.0.0.1)", value: "127.0.0.1" },
+];
+
+// ============ Engine Management ============
+
+async function checkEngine() {
+  try {
+    engineStatus.value = await invoke<EngineStatus>("get_engine_status");
+    if (engineStatus.value && !engineStatus.value.exists) {
+      ElMessage.info("引擎未安装，点击下载");
+    }
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function downloadEngine() {
+  downloading.value = true;
+  progress.value = 0;
+  ElMessage.info("开始下载引擎...");
+  try {
+    const result = await invoke<string>("download_engine");
+    downloading.value = false;
+    ElMessage.success("引擎下载成功：" + result);
+    await checkEngine();
+  } catch (e) {
+    downloading.value = false;
+    ElMessage.error("下载失败: " + e);
+  }
+}
+
+// ============ Config ============
+
+async function loadConfig() {
+  try {
+    const saved = await invoke<ServerConfig>("load_config");
+    Object.assign(config, saved);
+  } catch (e) {
+    console.error("Failed to load config:", e);
+  }
+}
+
+async function saveConfig() {
+  try {
+    await invoke("save_config", { config: { ...config } });
+    ElMessage.success("配置已保存");
+  } catch (e) {
+    ElMessage.error("保存失败: " + e);
+  }
+}
+
+// ============ Server Control ============
+
+async function startServer() {
+  if (!config.path) {
+    ElMessage.warning("请先选择要分享的文件夹路径");
+    return;
+  }
+  if (!engineStatus.value?.exists) {
+    ElMessage.warning("请先下载引擎");
+    return;
+  }
+  loading.value = true;
+  addLog("正在启动服务...");
+  invoke<ServerStatus>("start_server", { config: { ...config } })
+    .then((status) => {
+      serverStatus.value = status;
+      addLog("启动完成: " + JSON.stringify(status));
+      if (status.url) {
+        addLog("服务已启动: " + status.url);
+        ElMessage.success("服务已启动: " + status.url);
+        generateQr(status.url).catch(console.error);
+      }
+    })
+    .catch((e) => {
+      addLog("启动失败: " + e);
+      ElMessage.error("启动失败: " + e);
+    })
+    .finally(() => {
+      loading.value = false;
+      addLog("loading 已重置");
+    });
+}
+
+async function stopServer() {
+  loading.value = true;
+  addLog("正在停止服务...");
+  try {
+    await invoke("stop_server");
+    serverStatus.value = { running: false, pid: null, url: null, port: null };
+    qrCodeUrl.value = "";
+    addLog("服务已停止");
+    ElMessage.info("服务已停止");
+  } catch (e) {
+    ElMessage.error("停止失败: " + e);
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function checkServerStatus() {
+  try {
+    serverStatus.value = await invoke<ServerStatus>("get_server_status");
+    if (serverStatus.value?.url) {
+      await generateQr(serverStatus.value.url);
+    }
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+// ============ QR Code ============
+
+async function generateQr(url: string) {
+  try {
+    const resp = await invoke<QrResponse>("generate_qr", { data: url });
+    qrCodeUrl.value = resp.data;
+  } catch (e) {
+    console.error("QR generation failed:", e);
+  }
+}
+
+async function copyUrl() {
+  if (!serverStatus.value?.url) return;
+  try {
+    await navigator.clipboard.writeText(serverStatus.value.url);
+    copySuccess.value = true;
+    setTimeout(() => (copySuccess.value = false), 2000);
+    ElMessage.success("链接已复制");
+  } catch {
+    ElMessage.error("复制失败");
+  }
+}
+
+// ============ Path Selection ============
+
+async function selectPath() {
+  try {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const selected = await open({ directory: true, multiple: false });
+    if (selected) {
+      config.path = selected as string;
+    }
+  } catch (e) {
+    // Fallback: use prompt
+    const dir = window.prompt("请输入文件夹路径:");
+    if (dir) config.path = dir;
+  }
+}
+
+// ============ Logs ============
+
+function addLog(msg: string) {
+  const ts = new Date().toLocaleTimeString();
+  logs.value.push(`[${ts}] ${msg}`);
+  if (logs.value.length > 200) logs.value.shift();
+}
+
+// ============ Lifecycle ============
+
+onMounted(async () => {
+  await checkEngine();
+  await loadConfig();
+  await checkServerStatus();
+
+  await listen<number>("download-progress", (event) => {
+    progress.value = event.payload;
+  });
+
+  await listen("server-started", (event) => {
+    addLog("Server event: " + JSON.stringify(event.payload));
+  });
+});
 </script>
 
 <template>
-  <main class="container">
-    <h1>Welcome to Tauri + Vue</h1>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <h2>🖥️ miniserve GUI</h2>
+      <div class="header-actions">
+        <el-tag v-if="engineStatus?.exists" type="success" size="small">
+          ✅ 引擎已就绪 {{ engineStatus.version ? `(${engineStatus.version})` : "" }}
+        </el-tag>
+        <el-tag v-else type="warning" size="small">⚠️ 引擎未安装</el-tag>
+        <el-button
+          v-if="!engineStatus?.exists"
+          type="primary"
+          size="small"
+          :icon="Download"
+          @click="downloadEngine"
+          :loading="downloading"
+        >
+          {{ downloading ? `下载中 ${progress.toFixed(0)}%` : "下载引擎" }}
+        </el-button>
+        <el-button
+          v-else
+          type="info"
+          size="small"
+          :icon="Refresh"
+          @click="downloadEngine"
+          :loading="downloading"
+        >
+          更新引擎
+        </el-button>
+      </div>
+    </header>
 
-    <div class="row">
-      <a href="https://vite.dev" target="_blank">
-        <img src="/vite.svg" class="logo vite" alt="Vite logo" />
-      </a>
-      <a href="https://tauri.app" target="_blank">
-        <img src="/tauri.svg" class="logo tauri" alt="Tauri logo" />
-      </a>
-      <a href="https://vuejs.org/" target="_blank">
-        <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
-      </a>
+    <el-progress
+      v-if="downloading"
+      :percentage="progress"
+      :format="(p: number) => `${p.toFixed(1)}%`"
+      class="download-progress"
+    />
+
+    <div class="main-layout">
+      <!-- Config Panel -->
+      <aside class="config-panel">
+        <el-form label-width="120" size="small">
+          <!-- 基础运行 -->
+          <el-divider content-position="left">📂 基础运行</el-divider>
+
+          <el-form-item label="分享路径">
+            <div class="path-row">
+              <el-input v-model="config.path" placeholder="选择或输入文件夹路径" readonly />
+              <el-button type="primary" :icon="FolderOpened" @click="selectPath" />
+            </div>
+          </el-form-item>
+
+          <el-form-item label="端口">
+            <el-input-number v-model="config.port" :min="1" :max="65535" />
+          </el-form-item>
+
+          <el-form-item label="绑定网卡">
+            <el-select v-model="config.interfaces">
+              <el-option
+                v-for="opt in interfaceOptions"
+                :key="opt.value"
+                :label="opt.label"
+                :value="opt.value"
+              />
+            </el-select>
+          </el-form-item>
+
+          <!-- 安全控制 -->
+          <el-divider content-position="left">🔐 安全控制</el-divider>
+
+          <el-form-item label="用户名">
+            <el-input v-model="config.auth_username" placeholder="留空则不验证" />
+          </el-form-item>
+
+          <el-form-item label="密码">
+            <el-input
+              v-model="config.auth_password"
+              type="password"
+              placeholder="留空则不验证"
+              show-password
+            />
+          </el-form-item>
+
+          <el-form-item>
+            <el-switch v-model="config.upload" /> &nbsp; 允许上传文件
+          </el-form-item>
+
+          <el-form-item v-if="config.upload">
+            <el-switch v-model="config.mkdir" /> &nbsp; 允许创建目录
+          </el-form-item>
+
+          <el-form-item v-if="config.upload">
+            <el-switch v-model="config.media_controls" /> &nbsp; 允许媒体操作
+          </el-form-item>
+
+          <!-- 界面展示 -->
+          <el-divider content-position="left">🎨 界面展示</el-divider>
+
+          <el-form-item label="配色方案">
+            <el-radio-group v-model="config.color_scheme">
+              <el-radio v-for="cs in colorSchemes" :key="cs.value" :value="cs.value">
+                {{ cs.label }}
+              </el-radio>
+            </el-radio-group>
+          </el-form-item>
+
+          <el-form-item label="网页标题">
+            <el-input v-model="config.title" />
+          </el-form-item>
+
+          <el-form-item>
+            <el-switch v-model="config.hide_icons" /> &nbsp; 隐藏文件图标
+          </el-form-item>
+
+          <!-- 高级进阶 -->
+          <el-divider content-position="left">⚙️ 高级进阶</el-divider>
+
+          <el-form-item>
+            <el-switch v-model="config.spa" /> &nbsp; SPA 单页应用模式
+          </el-form-item>
+
+          <el-form-item label="压缩算法">
+            <el-select v-model="config.compress" clearable>
+              <el-option
+                v-for="opt in compressOptions"
+                :key="opt.value"
+                :label="opt.label"
+                :value="opt.value"
+              />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item>
+            <el-switch v-model="config.hidden" /> &nbsp; 显示隐藏文件
+          </el-form-item>
+
+          <el-form-item>
+            <el-switch v-model="config.thumbnails" /> &nbsp; 生成缩略图
+          </el-form-item>
+        </el-form>
+
+        <div class="panel-actions">
+          <el-button type="success" :icon="VideoPlay" @click="startServer" :loading="loading">
+            {{ serverStatus?.running ? "重启服务" : "启动服务" }}
+          </el-button>
+          <el-button
+            v-if="serverStatus?.running"
+            type="danger"
+            :icon="VideoPause"
+            @click="stopServer"
+            :loading="loading"
+          >
+            停止服务
+          </el-button>
+          <el-button type="info" @click="saveConfig">💾 保存配置</el-button>
+        </div>
+      </aside>
+
+      <!-- Right Panel: QR + Logs -->
+      <main class="right-panel">
+        <!-- Server Status Card -->
+        <el-card v-if="serverStatus?.running" class="status-card" shadow="hover">
+          <template #header>
+            <div class="card-header">
+              <span>🚀 服务运行中</span>
+              <el-tag type="success" size="small">PID {{ serverStatus.pid }}</el-tag>
+            </div>
+          </template>
+          <div class="url-display">
+            <el-link type="primary" :href="serverStatus.url!" target="_blank" :icon="Link">
+              {{ serverStatus.url }}
+            </el-link>
+            <el-button
+              type="primary"
+              size="small"
+              :icon="DocumentCopy"
+              @click="copyUrl"
+            >
+              {{ copySuccess ? "已复制!" : "复制" }}
+            </el-button>
+          </div>
+          <div v-if="qrCodeUrl" class="qr-section">
+            <img :src="qrCodeUrl" alt="QR Code" class="qr-image" />
+            <p class="qr-hint">📱 扫码访问</p>
+          </div>
+        </el-card>
+
+        <el-card v-else class="status-card" shadow="hover">
+          <div class="idle-state">
+            <p>⬜ 服务未运行</p>
+            <p class="hint">配置好参数后点击「启动服务」</p>
+          </div>
+        </el-card>
+
+        <!-- Log Panel -->
+        <el-card class="log-card" shadow="hover">
+          <template #header>
+            <div class="card-header">
+              <span>📋 运行日志</span>
+              <el-button text size="small" @click="logs = []">清空</el-button>
+            </div>
+          </template>
+          <div class="log-box">
+            <p v-for="(log, i) in logs" :key="i" class="log-line">{{ log }}</p>
+            <p v-if="logs.length === 0" class="log-empty">暂无日志</p>
+          </div>
+        </el-card>
+      </main>
     </div>
-    <p>Click on the Tauri, Vite, and Vue logos to learn more.</p>
-
-    <form class="row" @submit.prevent="greet">
-      <input id="greet-input" v-model="name" placeholder="Enter a name..." />
-      <button type="submit">Greet</button>
-    </form>
-    <p>{{ greetMsg }}</p>
-  </main>
+  </div>
 </template>
 
 <style scoped>
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
-
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #249b73);
-}
-
-</style>
-<style>
-:root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
-
-  color: #0f0f0f;
-  background-color: #f6f6f6;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
-}
-
-.container {
-  margin: 0;
-  padding-top: 10vh;
+.app-container {
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  text-align: center;
+  background: #f5f7fa;
+  overflow: hidden;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
-.row {
+.app-header {
   display: flex;
-  justify-content: center;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: #fff;
+  border-bottom: 1px solid #e4e7ed;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+.app-header h2 {
+  margin: 0;
+  font-size: 18px;
 }
 
-a:hover {
-  color: #535bf2;
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-h1 {
+.download-progress {
+  padding: 0 20px;
+}
+
+.main-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: 0;
+}
+
+.config-panel {
+  width: 400px;
+  min-width: 360px;
+  background: #fff;
+  padding: 16px;
+  overflow-y: auto;
+  border-right: 1px solid #e4e7ed;
+}
+
+.path-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.path-row .el-input {
+  flex: 1;
+}
+
+.panel-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.right-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.status-card {
+  flex-shrink: 0;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+}
+
+.url-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.qr-section {
   text-align: center;
+  margin-top: 12px;
 }
 
-input,
-button {
+.qr-image {
+  width: 180px;
+  height: 180px;
+  border: 4px solid #eee;
   border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
 }
 
-button {
-  cursor: pointer;
+.qr-hint {
+  margin-top: 8px;
+  color: #606266;
+  font-size: 14px;
 }
 
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
+.idle-state {
+  text-align: center;
+  padding: 20px;
+  color: #909399;
 }
 
-input,
-button {
-  outline: none;
+.idle-state .hint {
+  font-size: 13px;
+  margin-top: 8px;
 }
 
-#greet-input {
-  margin-right: 5px;
+.log-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
-  }
-
-  a:hover {
-    color: #24c8db;
-  }
-
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
-  }
-  button:active {
-    background-color: #0f0f0f69;
-  }
+.log-box {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 12px;
+  border-radius: 4px;
+  font-family: "Consolas", "Monaco", monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-y: auto;
+  max-height: 300px;
 }
 
+.log-line {
+  margin: 2px 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-empty {
+  color: #666;
+  text-align: center;
+  padding: 20px;
+}
 </style>
