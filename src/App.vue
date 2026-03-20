@@ -24,8 +24,8 @@ interface ServerConfig {
   media_controls: boolean;
   color_scheme: string;
   title: string;
-  hide_icons: boolean;
-  spa: boolean;
+  // hide_icons: boolean;
+  // spa: boolean;
   compress: string;
   hidden: boolean;
   thumbnails: boolean;
@@ -66,19 +66,20 @@ const config = reactive<ServerConfig>({
   upload: false,
   mkdir: false,
   media_controls: false,
-  color_scheme: "dark",
+  color_scheme: "squirrel",
   title: "miniserve",
-  hide_icons: false,
-  spa: false,
+  // hide_icons: false,
+  // spa: false,
   compress: "",
   hidden: false,
   thumbnails: false,
 });
 
 const colorSchemes = [
-  { label: "暗色 (dark)", value: "dark" },
-  { label: "亮色 (light)", value: "light" },
-  { label: "松鼠 (squirrel)", value: "squirrel" },
+  { label: "🐿️ 松鼠 (squirrel)", value: "squirrel" },
+  { label: "🐧 Arch Linux (archlinux)", value: "archlinux" },
+  { label: "🎋 禅意 (zenburn)", value: "zenburn" },
+  { label: "🍈 物语 (monokai)", value: "monokai" },
 ];
 
 const compressOptions = [
@@ -352,10 +353,8 @@ onMounted(async () => {
     <div class="main-layout">
       <!-- Config Panel -->
       <aside class="config-panel">
-        <el-form label-width="120" size="small">
-          <!-- 基础运行 -->
-          <el-divider content-position="left">📂 基础运行</el-divider>
-
+        <el-form label-width="90" size="small">
+          <div class="section-title">📂 基础运行</div>
           <el-form-item label="分享路径">
             <div class="path-row">
               <el-input v-model="config.path" placeholder="选择或输入文件夹路径" readonly />
@@ -378,9 +377,7 @@ onMounted(async () => {
             </el-select>
           </el-form-item>
 
-          <!-- 安全控制 -->
-          <el-divider content-position="left">🔐 安全控制</el-divider>
-
+          <div class="section-title">🔐 安全控制</div>
           <el-form-item label="用户名">
             <el-input v-model="config.auth_username" placeholder="留空则不验证" />
           </el-form-item>
@@ -402,37 +399,31 @@ onMounted(async () => {
             <el-switch v-model="config.mkdir" /> &nbsp; 允许创建目录
           </el-form-item>
 
-          <el-form-item v-if="config.upload">
+          <!-- <el-form-item v-if="config.upload">
             <el-switch v-model="config.media_controls" /> &nbsp; 允许媒体操作
-          </el-form-item>
+          </el-form-item> -->
 
-          <!-- 界面展示 -->
-          <el-divider content-position="left">🎨 界面展示</el-divider>
-
+          <div class="section-title">🎨 界面展示</div>
           <el-form-item label="配色方案">
-            <el-radio-group v-model="config.color_scheme">
-              <el-radio v-for="cs in colorSchemes" :key="cs.value" :value="cs.value">
-                {{ cs.label }}
-              </el-radio>
-            </el-radio-group>
+            <el-select v-model="config.color_scheme" placeholder="选择配色方案">
+              <el-option
+                v-for="cs in colorSchemes"
+                :key="cs.value"
+                :label="cs.label"
+                :value="cs.value"
+              />
+            </el-select>
           </el-form-item>
 
           <el-form-item label="网页标题">
             <el-input v-model="config.title" />
           </el-form-item>
 
-          <el-form-item>
+          <!-- <el-form-item>
             <el-switch v-model="config.hide_icons" /> &nbsp; 隐藏文件图标
-          </el-form-item>
+          </el-form-item> -->
 
-          <!-- 高级进阶 -->
-          <el-divider content-position="left">⚙️ 高级进阶</el-divider>
-
-          <el-form-item>
-            <el-switch v-model="config.spa" /> &nbsp; SPA 单页应用模式
-          </el-form-item>
-
-          <el-form-item label="压缩算法">
+          <!-- <el-form-item label="压缩算法">
             <el-select v-model="config.compress" clearable>
               <el-option
                 v-for="opt in compressOptions"
@@ -441,15 +432,16 @@ onMounted(async () => {
                 :value="opt.value"
               />
             </el-select>
-          </el-form-item>
+          </el-form-item> -->
 
+          <div class="section-title">⚙️ 高级进阶</div>
           <el-form-item>
             <el-switch v-model="config.hidden" /> &nbsp; 显示隐藏文件
           </el-form-item>
 
-          <el-form-item>
+          <!-- <el-form-item>
             <el-switch v-model="config.thumbnails" /> &nbsp; 生成缩略图
-          </el-form-item>
+          </el-form-item> -->
         </el-form>
 
 
