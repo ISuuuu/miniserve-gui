@@ -20,14 +20,10 @@
 | 安全控制 | `-a, --auth` | 用户名:密码 认证 |
 | | `-u, --upload` | 允许访客上传文件 |
 | | `-M, --mkdir` | 允许创建目录 |
-| | `--media-controls` | 允许操作媒体文件 |
-| 界面展示 | `--color-scheme` | 配色主题（dark/light/squirrel）|
+| 界面展示 | `--color-scheme` | 配色主题（squirrel", "archlinux", "zenburn", "monokai）|
 | | `--title` | 网页标题 |
-| | `--hide-icons` | 隐藏文件图标 |
-| 高级进阶 | `--spa` | SPA 单页应用模式 |
-| | `-c, --compress` | 压缩算法（gzip/br/deflate）|
+| 高级进阶  
 | | `-H, --hidden` | 显示隐藏文件 |
-| | `--thumbnails` | 生成图片缩略图 |
 
 ## 技术栈
 

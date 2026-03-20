@@ -6,7 +6,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 
 use futures_util::StreamExt;
-use log::info;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -24,8 +24,8 @@ pub struct ServerConfig {
     pub media_controls: bool,
     pub color_scheme: String,
     pub title: String,
-    pub hide_icons: bool,
-    pub spa: bool,
+    // pub hide_icons: bool, // 已禁用
+    // pub spa: bool,
     pub compress: String,
     pub hidden: bool,
     pub thumbnails: bool,
@@ -42,10 +42,10 @@ impl Default for ServerConfig {
             upload: false,
             mkdir: false,
             media_controls: false,
-            color_scheme: "dark".into(),
+            color_scheme: "squirrel".into(),
             title: "miniserve".into(),
-            hide_icons: false,
-            spa: false,
+            // hide_icons: false,
+            // spa: false,
             compress: "".into(),
             hidden: false,
             thumbnails: false,
@@ -140,7 +140,7 @@ fn get_local_ip_fallback() -> Option<String> {
     Some(local_addr.ip().to_string())
 }
 
-fn build_miniserve_args(cfg: &ServerConfig) -> Vec<String> {
+fn build_miniserve_args(cfg: &ServerConfig) -> Result<Vec<String>, String> {
     let mut args = vec![];
 
     // Path must come first (the root directory to serve)
@@ -169,11 +169,14 @@ fn build_miniserve_args(cfg: &ServerConfig) -> Vec<String> {
     }
     if cfg.mkdir {
         args.push("-M".into());
+        args.push(cfg.path.clone());
     }
     if cfg.media_controls {
         args.push("--media-controls".into());
     }
-    if cfg.color_scheme != "dark" {
+    // Valid values: squirrel, archlinux, zenburn, monokai
+    let valid = ["squirrel", "archlinux", "zenburn", "monokai"];
+    if valid.contains(&cfg.color_scheme.as_str()) {
         args.push("--color-scheme".into());
         args.push(cfg.color_scheme.clone());
     }
@@ -181,16 +184,16 @@ fn build_miniserve_args(cfg: &ServerConfig) -> Vec<String> {
         args.push("--title".into());
         args.push(cfg.title.clone());
     }
-    if cfg.hide_icons {
-        args.push("--hide-icons".into());
-    }
-    if cfg.spa {
-        args.push("--spa".into());
-    }
-    if !cfg.compress.is_empty() {
-        args.push("-c".into());
-        args.push(cfg.compress.clone());
-    }
+    // if cfg.hide_icons {
+    //     args.push("--hide-icons".into());
+    // }
+    // if cfg.spa {
+    //     args.push("--spa --index index.html".into());
+    // }
+    // if !cfg.compress.is_empty() {
+    //     args.push("-c".into());
+    //     args.push(cfg.compress.clone());
+    // }
     if cfg.hidden {
         args.push("-H".into());
     }
@@ -198,7 +201,7 @@ fn build_miniserve_args(cfg: &ServerConfig) -> Vec<String> {
         args.push("--thumbnails".into());
     }
 
-    args
+    Ok(args)
 }
 
 // ============ Tauri Commands ============
@@ -368,15 +371,40 @@ async fn start_server(
         return Err("引擎未安装，请先下载".into());
     }
 
-    let args = build_miniserve_args(&config);
+    let args = build_miniserve_args(&config)?;
     info!("Starting miniserve with args: {:?}", args);
 
     let mut child = Command::new(&engine_path)
         .args(&args)
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| e.to_string())?;
+
+    // Read stdout and stderr output
+    use std::io::{BufRead, BufReader};
+    let stdout = child.stdout.take().map(|s| BufReader::new(s));
+    let stderr = child.stderr.take().map(|s| BufReader::new(s));
+
+    // Log stdout in background
+    let engine_path_for_log = engine_path.clone();
+    let args_for_log = args.clone();
+    std::thread::spawn(move || {
+        if let Some(stdout) = stdout {
+            for line in stdout.lines().map_while(Result::ok) {
+                log::info!("[miniserve stdout] {}", line);
+            }
+        }
+    });
+
+    // Log stderr in background
+    std::thread::spawn(move || {
+        if let Some(stderr) = stderr {
+            for line in stderr.lines().map_while(Result::ok) {
+                log::warn!("[miniserve stderr] {}", line);
+            }
+        }
+    });
 
     // Wait briefly and check if process is still running
     use std::time::Duration;
@@ -384,9 +412,15 @@ async fn start_server(
     thread::sleep(Duration::from_millis(800));
 
     if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
+        // Re-construct command string for error message
+        let cmd_str = std::iter::once(engine_path_for_log.to_string_lossy().to_string())
+            .chain(args_for_log)
+            .collect::<Vec<_>>()
+            .join(" ");
         return Err(format!(
-            "miniserve 启动失败 (exit code: {:?})",
-            status.code()
+            "miniserve 启动失败 (exit code: {:?})\n命令: {}\n请查看日志获取详细信息",
+            status.code(),
+            cmd_str
         ));
     }
 
