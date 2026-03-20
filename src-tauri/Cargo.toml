@@ -36,3 +36,10 @@ base64 = "0.22"
 dirs = "5"
 log = "0.4"
 env_logger = "0.11"
+
+[profile.release]
+strip = true       # 剔除调试信息（最有效，能砍掉 70% 体积）
+opt-level = "z"    # 极致体积优化
+lto = true         # 全局链接优化
+codegen-units = 1  # 牺牲编译速度换取体积优化
+panic = "abort"    # 去掉异常回溯代码
