@@ -3,7 +3,7 @@ import { ref, reactive, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ElMessage } from "element-plus";
-import { FolderOpened, Download, VideoPlay, VideoPause, Refresh, DocumentCopy, Link } from "@element-plus/icons-vue";
+import { FolderOpened, Download, VideoPlay, VideoPause, Refresh, DocumentCopy } from "@element-plus/icons-vue";
 
 // ============ Types ============
 
@@ -35,6 +35,7 @@ interface ServerStatus {
   running: boolean;
   pid: number | null;
   url: string | null;
+  urls: string[];
   port: number | null;
 }
 
@@ -50,8 +51,11 @@ const downloading = ref(false);
 const progress = ref(0);
 const loading = ref(false);
 const qrCodeUrl = ref("");
+const qrCodes = ref<(string | null)[]>([]);
+const serverUrls = ref<string[]>([]);
 const logs = ref<string[]>([]);
 const copySuccess = ref(false);
+const hoveredIdx = ref<number | null>(null);
 
 const config = reactive<ServerConfig>({
   path: "",
@@ -150,24 +154,29 @@ async function startServer() {
   }
   loading.value = true;
   addLog("正在启动服务...");
-  invoke<ServerStatus>("start_server", { config: { ...config } })
-    .then((status) => {
-      serverStatus.value = status;
-      addLog("启动完成: " + JSON.stringify(status));
-      if (status.url) {
-        addLog("服务已启动: " + status.url);
-        ElMessage.success("服务已启动: " + status.url);
-        generateQr(status.url).catch(console.error);
-      }
-    })
-    .catch((e) => {
-      addLog("启动失败: " + e);
-      ElMessage.error("启动失败: " + e);
-    })
-    .finally(() => {
-      loading.value = false;
-      addLog("loading 已重置");
-    });
+  try {
+    const status = await invoke<ServerStatus>("start_server", { config: { ...config } });
+    serverStatus.value = status;
+    addLog("启动完成: " + JSON.stringify(status));
+    
+    // 显示所有 URL
+    const urlsToShow = status.urls && status.urls.length > 0 ? status.urls : (status.url ? [status.url] : []);
+    if (urlsToShow.length > 0) {
+      addLog("服务已启动: " + urlsToShow.join(', '));
+      ElMessage.success("服务已启动: " + urlsToShow.join(', '));
+      serverUrls.value = urlsToShow;
+      // 为每个 URL 生成二维码
+      qrCodes.value = await Promise.all(
+        urlsToShow.map(url => generateQr(url))
+      );
+    }
+  } catch (e) {
+    addLog("启动失败: " + e);
+    ElMessage.error("启动失败: " + e);
+  } finally {
+    loading.value = false;
+    addLog("loading 已重置");
+  }
 }
 
 async function stopServer() {
@@ -175,8 +184,10 @@ async function stopServer() {
   addLog("正在停止服务...");
   try {
     await invoke("stop_server");
-    serverStatus.value = { running: false, pid: null, url: null, port: null };
+    serverStatus.value = { running: false, pid: null, url: null, urls: [], port: null };
     qrCodeUrl.value = "";
+    qrCodes.value = [];
+    serverUrls.value = [];
     addLog("服务已停止");
     ElMessage.info("服务已停止");
   } catch (e) {
@@ -199,19 +210,21 @@ async function checkServerStatus() {
 
 // ============ QR Code ============
 
-async function generateQr(url: string) {
+async function generateQr(url: string): Promise<string> {
   try {
     const resp = await invoke<QrResponse>("generate_qr", { data: url });
-    qrCodeUrl.value = resp.data;
+    return resp.data;
   } catch (e) {
     console.error("QR generation failed:", e);
+    return "";
   }
 }
 
-async function copyUrl() {
-  if (!serverStatus.value?.url) return;
+async function copyUrl(url?: string) {
+  const urlToCopy = url || serverStatus.value?.url || "";
+  if (!urlToCopy) return;
   try {
-    await navigator.clipboard.writeText(serverStatus.value.url);
+    await navigator.clipboard.writeText(urlToCopy);
     copySuccess.value = true;
     setTimeout(() => (copySuccess.value = false), 2000);
     ElMessage.success("链接已复制");
@@ -431,22 +444,34 @@ onMounted(async () => {
               <el-tag type="success" size="small">PID {{ serverStatus.pid }}</el-tag>
             </div>
           </template>
-          <div class="url-display">
-            <el-link type="primary" :href="serverStatus.url!" target="_blank" :icon="Link">
-              {{ serverStatus.url }}
-            </el-link>
-            <el-button
-              type="primary"
-              size="small"
-              :icon="DocumentCopy"
-              @click="copyUrl"
-            >
-              {{ copySuccess ? "已复制!" : "复制" }}
-            </el-button>
-          </div>
-          <div v-if="qrCodeUrl" class="qr-section">
-            <img :src="qrCodeUrl" alt="QR Code" class="qr-image" />
-            <p class="qr-hint">📱 扫码访问</p>
+          <div class="url-layout">
+            <div class="url-column">
+              <div 
+                v-for="(url, idx) in serverUrls" 
+                :key="idx" 
+                class="url-item"
+                :class="{ active: hoveredIdx === idx }"
+                @mouseenter="hoveredIdx = idx"
+                @mouseleave="hoveredIdx = null"
+              >
+                <el-link type="primary" :href="url" target="_blank">
+                  {{ url }}
+                </el-link>
+                <el-button type="primary" size="small" text @click="copyUrl(url)">
+                  <el-icon><DocumentCopy /></el-icon>
+                  {{ copySuccess ? "已复制" : "复制" }}
+                </el-button>
+              </div>
+            </div>
+            <div class="qr-column">
+              <div v-if="hoveredIdx !== null && qrCodes[hoveredIdx]" class="qr-display">
+                <img :src="qrCodes[hoveredIdx]" alt="QR" class="qr-img" />
+                <div class="qr-hint">{{ serverUrls[hoveredIdx] }}</div>
+              </div>
+              <div v-else class="qr-placeholder">
+                鼠标悬停地址查看二维码
+              </div>
+            </div>
           </div>
         </el-card>
 
@@ -561,29 +586,76 @@ onMounted(async () => {
   font-weight: 600;
 }
 
-.url-display {
+.url-layout {
+  display: flex;
+  gap: 16px;
+  min-height: 180px;
+}
+
+.url-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.url-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 8px 0;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: #f5f7fa;
+  border-radius: 6px;
+  gap: 8px;
+  font-size: 13px;
+  transition: all 0.2s;
 }
 
-.qr-section {
-  text-align: center;
-  margin-top: 12px;
+.url-item .el-link {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.qr-image {
-  width: 180px;
-  height: 180px;
-  border: 4px solid #eee;
+.url-item.active {
+  background: #ecf5ff;
+  border: 1px solid #409eff;
+}
+
+.qr-column {
+  width: 200px;
+  min-height: 180px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fafafa;
   border-radius: 8px;
+  padding: 12px;
+}
+
+.qr-display {
+  text-align: center;
+}
+
+.qr-display .qr-img {
+  width: 150px;
+  height: 150px;
 }
 
 .qr-hint {
   margin-top: 8px;
+  font-size: 12px;
   color: #606266;
-  font-size: 14px;
+  word-break: break-all;
+}
+
+.qr-placeholder {
+  color: #909399;
+  font-size: 13px;
+  text-align: center;
 }
 
 .idle-state {

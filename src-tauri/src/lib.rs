@@ -64,7 +64,8 @@ pub struct EngineStatus {
 pub struct ServerStatus {
     pub running: bool,
     pub pid: Option<u32>,
-    pub url: Option<String>,
+    pub url: Option<String>,       // 主 URL（第一个 IP）
+    pub urls: Vec<String>,         // 所有可访问的 URL
     pub port: Option<u16>,
 }
 
@@ -104,6 +105,39 @@ fn get_engine_path() -> PathBuf {
 fn get_config_path() -> PathBuf {
     let base = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
     base.join("miniserve-gui").join("config.json")
+}
+
+fn get_local_ips() -> Vec<String> {
+    use std::net::IpAddr;
+    let mut ips = Vec::new();
+
+    if let Ok(interfaces) = if_addrs::get_if_addrs() {
+        for iface in interfaces {
+            // 只取 IPv4，跳过回环地址
+            if let IpAddr::V4(ipv4) = iface.addr.ip() {
+                if !ipv4.is_loopback() {
+                    ips.push(ipv4.to_string());
+                }
+            }
+        }
+    }
+
+    // 如果获取失败，回退到 UDP 方式
+    if ips.is_empty() {
+        if let Some(ip) = get_local_ip_fallback() {
+            ips.push(ip);
+        }
+    }
+
+    ips
+}
+
+fn get_local_ip_fallback() -> Option<String> {
+    use std::net::UdpSocket;
+    let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    let local_addr = socket.local_addr().ok()?;
+    Some(local_addr.ip().to_string())
 }
 
 fn build_miniserve_args(cfg: &ServerConfig) -> Vec<String> {
@@ -357,7 +391,20 @@ async fn start_server(
     }
 
     let pid = child.id();
-    let url = format!("http://{}:{}", config.interfaces, config.port);
+
+    // 生成所有可访问的 URL
+    let urls: Vec<String> = if config.interfaces == "0.0.0.0" {
+        let ips = get_local_ips();
+        if ips.is_empty() {
+            vec![format!("http://127.0.0.1:{}", config.port)]
+        } else {
+            ips.iter().map(|ip| format!("http://{}:{}", ip, config.port)).collect()
+        }
+    } else {
+        vec![format!("http://{}:{}", config.interfaces, config.port)]
+    };
+
+    let url = urls.first().cloned();
 
     {
         let mut child_guard = state.child.lock().map_err(|e| e.to_string())?;
@@ -365,15 +412,16 @@ async fn start_server(
     }
     {
         let mut url_guard = state.server_url.lock().map_err(|e| e.to_string())?;
-        *url_guard = Some(url.clone());
+        *url_guard = url.clone();
     }
 
-    let _ = app_handle.emit("server-started", &url);
+    let _ = app_handle.emit("server-started", &urls);
 
     Ok(ServerStatus {
         running: true,
         pid: Some(pid),
-        url: Some(url),
+        url,
+        urls,
         port: Some(config.port),
     })
 }
@@ -401,11 +449,13 @@ async fn get_server_status(state: State<'_, AppState>) -> Result<ServerStatus, S
     let running = child_guard.is_some();
     let pid = child_guard.as_ref().map(|c| c.id());
     let url = url_guard.clone();
+    let urls: Vec<String> = url.iter().cloned().collect();
 
     Ok(ServerStatus {
         running,
         pid,
         url,
+        urls,
         port: None,
     })
 }
