@@ -33,6 +33,51 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Node.js (for version sync)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install pnpm (for version sync)
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Sync tag/version to manifests
+        env:
+          VERSION: ${{ github.event.inputs.version || github.ref_name }}
+        run: |
+          node -e "
+          const fs = require('fs');
+          let v = process.env.VERSION || '';
+          if (v.startsWith('v')) v = v.slice(1);
+          if (!v) { console.log('No version provided, skipping sync'); process.exit(0); }
+          // package.json
+          try {
+            const pkgPath = 'package.json';
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+            pkg.version = v;
+            fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+            console.log('Updated package.json to', v);
+          } catch (e) { console.error('package.json update failed', e); }
+          // src-tauri/Cargo.toml
+          try {
+            const cargoPath = 'src-tauri/Cargo.toml';
+            let cargo = fs.readFileSync(cargoPath, 'utf8');
+            cargo = cargo.replace(/^version\s*=\s*\".*\"/m, `version = \"${v}\"`);
+            fs.writeFileSync(cargoPath, cargo);
+            console.log('Updated Cargo.toml to', v);
+          } catch (e) { console.error('Cargo.toml update failed', e); }
+          // src-tauri/tauri.conf.json
+          try {
+            const tauriPath = 'src-tauri/tauri.conf.json';
+            const tauri = JSON.parse(fs.readFileSync(tauriPath, 'utf8'));
+            tauri.version = v;
+            fs.writeFileSync(tauriPath, JSON.stringify(tauri, null, 2) + '\n');
+            console.log('Updated tauri.conf.json to', v);
+          } catch (e) { console.error('tauri.conf.json update failed', e); }
+          "
+
       - name: Install dependencies (Linux x86_64)
         if: matrix.os == 'ubuntu-22.04'
         run: |
