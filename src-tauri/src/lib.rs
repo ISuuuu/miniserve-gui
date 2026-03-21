@@ -233,8 +233,17 @@ async fn get_engine_status() -> Result<EngineStatus, String> {
     let path = get_engine_path();
     let exists = path.exists();
     let version = if exists {
-        let output = Command::new(&path)
-            .arg("--version")
+        let mut cmd = Command::new(&path);
+        cmd.arg("--version");
+        
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+        
+        let output = cmd
             .output()
             .ok()
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
@@ -581,7 +590,11 @@ async fn generate_qr(data: String) -> Result<QrCodeResponse, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 只在 debug 模式下初始化 logger，避免 release 模式弹出控制台
+    #[cfg(debug_assertions)]
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    
+    #[cfg(debug_assertions)]
     info!("miniserve-gui starting...");
 
     tauri::Builder::default()
