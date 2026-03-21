@@ -33,57 +33,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (for version sync)
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install pnpm (for version sync)
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
-      - name: Sync tag/version to manifests
-        env:
-          VERSION: ${{ github.event.inputs.version || github.ref_name }}
-        run: |
-          node -e "
-          const fs = require('fs');
-          let v = process.env.VERSION || '';
-          if (v.startsWith('v')) v = v.slice(1);
-          if (!v) { console.log('No version provided, skipping sync'); process.exit(0); }
-          // package.json
-          try {
-            const pkgPath = 'package.json';
-            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-            pkg.version = v;
-            fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-            console.log('Updated package.json to', v);
-          } catch (e) { console.error('package.json update failed', e); }
-          // src-tauri/Cargo.toml
-          try {
-            const cargoPath = 'src-tauri/Cargo.toml';
-            let cargo = fs.readFileSync(cargoPath, 'utf8');
-            cargo = cargo.replace(/^version\s*=\s*\".*\"/m, `version = \"${v}\"`);
-            fs.writeFileSync(cargoPath, cargo);
-            console.log('Updated Cargo.toml to', v);
-          } catch (e) { console.error('Cargo.toml update failed', e); }
-          // src-tauri/tauri.conf.json
-          try {
-            const tauriPath = 'src-tauri/tauri.conf.json';
-            const tauri = JSON.parse(fs.readFileSync(tauriPath, 'utf8'));
-            tauri.version = v;
-            fs.writeFileSync(tauriPath, JSON.stringify(tauri, null, 2) + '\n');
-            console.log('Updated tauri.conf.json to', v);
-          } catch (e) { console.error('tauri.conf.json update failed', e); }
-          "
-
-      - name: Install dependencies (Linux x86_64)
-        if: matrix.os == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -93,6 +42,18 @@ jobs:
         uses: pnpm/action-setup@v3
         with:
           version: 9
+
+      - name: Sync tag/version to manifests (safe)
+        env:
+          VERSION: ${{ github.event.inputs.version || github.ref_name }}
+        run: |
+          node -e "(async ()=>{\n            const fs = require('fs');\n            try {\n              let v = process.env.VERSION || '';\n              if (v.startsWith('v')) v = v.slice(1);\n              // 简单的校验：如果不是数字开头，说明获取到的可能是分支名（如 main），跳过同步\n              if (!/^\d/.test(v)) { console.log('Invalid version format (maybe a branch name), skipping sync:', v); return; }\n\n              // package.json\n              try {\n                const pkgPath = 'package.json';\n                const pkg = JSON.parse(fs.readFileSync(pkgPath,'utf8'));\n                pkg.version = v;\n                fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\\n', 'utf8');\n                console.log('Updated package.json to', v);\n              } catch (e) { console.warn('package.json not found or update failed'); }\n\n              // src-tauri/Cargo.toml\n              try {\n                const cargoPath = 'src-tauri/Cargo.toml';\n                let cargo = fs.readFileSync(cargoPath, 'utf8');\n                const pkgSectionRegex = /(\\[package\\][\\s\\S]*?)(^\\[|$)/m;\n                const m = cargo.match(pkgSectionRegex);\n                if (m) {\n                  const pkgSection = m[1];\n                  const newPkgSection = pkgSection.replace(/(^version\\s*=\\s*)\\\"[^\\\"]*\\\"/m, \`\$1\\\"\${v}\\\"\`);\n                  cargo = cargo.replace(pkgSection, newPkgSection);\n                  fs.writeFileSync(cargoPath, cargo, 'utf8');\n                  console.log('Updated Cargo.toml package.version to', v);\n                }\n              } catch (e) { console.warn('Cargo.toml not found or update failed'); }\n\n              // src-tauri/tauri.conf.json\n              try {\n                const tauriPath = 'src-tauri/tauri.conf.json';\n                const tauri = JSON.parse(fs.readFileSync(tauriPath, 'utf8'));\n                tauri.version = v;\n                fs.writeFileSync(tauriPath, JSON.stringify(tauri, null, 2) + '\\n', 'utf8');\n                console.log('Updated tauri.conf.json to', v);\n              } catch (e) { console.warn('tauri.conf.json not found or update failed'); }\n\n            } catch(e){ console.error('Sync failed', e); process.exit(1);} \n          })();"
+
+      - name: Install dependencies (Linux x86_64)
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -122,9 +83,13 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Create CHANGELOG if not exists
         run: |
@@ -132,14 +97,29 @@ jobs:
             echo -e "# Changelog\n\nAll notable changes to this project will be documented in this file." > CHANGELOG.md
           fi
 
-      - name: Get version from tag
+      - name: Get version
         id: get_version
-        run: echo "VERSION=${{ github.event.inputs.version || github.ref_name }}" >> $GITHUB_OUTPUT
+        run: |
+          V="${{ github.event.inputs.version || github.ref_name }}"
+          echo "VERSION=$V" >> $GITHUB_OUTPUT
 
       - name: Update CHANGELOG
         run: |
-          if grep -q "## ${{ steps.get_version.outputs.VERSION }}" CHANGELOG.md; then
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          if grep -q "## $VERSION" CHANGELOG.md; then
             echo "Version already in CHANGELOG"
           else
-            sed -i "1a\\n## ${{ steps.get_version.outputs.VERSION }}\n\n- Release ${{ steps.get_version.outputs.VERSION }}\n" CHANGELOG.md
+            # 在第一行标题后插入新版本记录
+            sed -i "2i\\\n## $VERSION\n\n- Release $VERSION\n" CHANGELOG.md
+          fi
+
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          # 只有在文件有变动时才提交，避免报错
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: update changelog for ${{ steps.get_version.outputs.VERSION }}"
+            git push origin main
           fi
