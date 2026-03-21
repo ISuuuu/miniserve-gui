@@ -82,12 +82,7 @@ const colorSchemes = [
   { label: "🍈 物语 (monokai)", value: "monokai" },
 ];
 
-const compressOptions = [
-  { label: "无", value: "" },
-  { label: "gzip", value: "gzip" },
-  { label: "brotli (br)", value: "br" },
-  { label: "deflate", value: "deflate" },
-];
+
 
 const interfaceOptions = [
   { label: "所有网卡 (0.0.0.0)", value: "0.0.0.0" },
