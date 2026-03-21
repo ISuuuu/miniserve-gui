@@ -29,6 +29,9 @@ interface ServerConfig {
   compress: string;
   hidden: boolean;
   thumbnails: boolean;
+  random_route: boolean;
+  readme: boolean;
+  download: boolean;
 }
 
 interface ServerStatus {
@@ -73,6 +76,9 @@ const config = reactive<ServerConfig>({
   compress: "",
   hidden: false,
   thumbnails: false,
+  random_route: false,
+  readme: false,
+  download: false,
 });
 
 const colorSchemes = [
@@ -349,7 +355,7 @@ onMounted(async () => {
       <!-- Config Panel -->
       <aside class="config-panel">
         <el-form label-width="90" size="small">
-          <div class="section-title">📂 基础运行</div>
+          <div class="section-title">📂 基础配置</div>
           <el-form-item label="分享路径">
             <div class="path-row">
               <el-input v-model="config.path" placeholder="选择或输入文件夹路径" readonly />
@@ -387,11 +393,8 @@ onMounted(async () => {
           </el-form-item>
 
           <el-form-item>
-            <el-switch v-model="config.upload" /> &nbsp; 允许上传文件
-          </el-form-item>
-
-          <el-form-item v-if="config.upload">
-            <el-switch v-model="config.mkdir" /> &nbsp; 允许创建目录
+            <el-switch v-model="config.upload" /> &nbsp; 上传文件
+            <el-switch v-model="config.mkdir" v-if="config.upload" style="margin-left: 16px" /> &nbsp; <span v-if="config.upload">创建目录</span>
           </el-form-item>
 
           <!-- <el-form-item v-if="config.upload">
@@ -430,9 +433,35 @@ onMounted(async () => {
           </el-form-item> -->
 
           <div class="section-title">⚙️ 高级进阶</div>
-          <el-form-item>
-            <el-switch v-model="config.hidden" /> &nbsp; 显示隐藏文件
-          </el-form-item>
+          <div class="two-col">
+            <el-form-item>
+              <div class="switch-row">
+                <el-switch v-model="config.hidden" />
+                <span>显示隐藏文件</span>
+              </div>
+            </el-form-item>
+
+            <el-form-item>
+              <div class="switch-row">
+                <el-switch v-model="config.random_route" />
+                <span>随机路径</span>
+              </div>
+            </el-form-item>
+
+            <el-form-item>
+              <div class="switch-row">
+                <el-switch v-model="config.readme" />
+                <span>README渲染</span>
+              </div>
+            </el-form-item>
+
+            <el-form-item>
+              <div class="switch-row">
+                <el-switch v-model="config.download" />
+                <span>一键打包下载</span>
+              </div>
+            </el-form-item>
+          </div>
 
           <!-- <el-form-item>
             <el-switch v-model="config.thumbnails" /> &nbsp; 生成缩略图
@@ -548,8 +577,8 @@ onMounted(async () => {
 }
 
 .config-panel {
-  width: 400px;
-  min-width: 360px;
+  width: 320px;
+  min-width: 280px;
   background: #fff;
   padding: 16px;
   overflow-y: auto;
@@ -562,6 +591,8 @@ onMounted(async () => {
   width: 100%;
 }
 
+
+
 .path-row .el-input {
   flex: 1;
 }
@@ -571,6 +602,28 @@ onMounted(async () => {
   gap: 8px;
   margin-top: 20px;
   flex-wrap: wrap;
+}
+
+.two-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.two-col .el-form-item {
+  margin-bottom: 6px;
+}
+
+/* 将无标签的表单项内容区右移，与带标签的控件对齐 */
+.two-col .el-form-item .el-form-item__content {
+  margin-left: 70px; /* 向左移动一些以更接近配色方案位置 */
+  padding: 0;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .right-panel {
