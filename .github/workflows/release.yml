@@ -90,46 +90,6 @@ jobs:
         with:
           tagName: ${{ github.event.inputs.version || github.ref_name }}
           releaseName: "miniserve-gui ${{ github.event.inputs.version || github.ref_name }}"
-          releaseBody: "See [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details."
           releaseDraft: true
           prerelease: false
           args: --target ${{ matrix.target }}
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Create CHANGELOG if not exists
-        run: |
-          if [ ! -f CHANGELOG.md ]; then
-            echo -e "# Changelog\n\nAll notable changes to this project will be documented in this file." > CHANGELOG.md
-          fi
-
-      - name: Get version
-        id: get_v
-        run: echo "VERSION=${{ github.event.inputs.version || github.ref_name }}" >> $GITHUB_OUTPUT
-
-      - name: Update CHANGELOG
-        run: |
-          V_TAG="${{ steps.get_v.outputs.VERSION }}"
-          if ! grep -q "## $V_TAG" CHANGELOG.md; then
-            # 在首行标题后插入新版本记录
-            sed -i "2i\\\n## $V_TAG\n\n- Release $V_TAG\n" CHANGELOG.md
-          fi
-
-      - name: Commit and Push changes
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add CHANGELOG.md
-          if ! git diff --cached --quiet; then
-            git commit -m "chore: update changelog for ${{ steps.get_v.outputs.VERSION }}"
-            git push origin HEAD:main
-          fi
