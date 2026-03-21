@@ -580,10 +580,12 @@ onMounted(async () => {
   gap: 12px;
   padding: 16px;
   overflow-y: auto;
+  min-height: 0;
 }
 
 .status-card {
   flex-shrink: 0;
+  flex: 0 1 220px;
 }
 
 .card-header {
@@ -663,6 +665,7 @@ onMounted(async () => {
   color: #909399;
   font-size: 13px;
   text-align: center;
+  padding: 16px;
 }
 
 .idle-state {
@@ -677,16 +680,15 @@ onMounted(async () => {
 }
 
 .log-card {
-  flex: 1;
+  flex: 1 1 350px;
   display: flex;
   flex-direction: column;
-  min-height: 200px;
 }
 
 .log-box {
   background: #1e1e1e;
   color: #d4d4d4;
-  padding: 12px;
+  padding: 16px;
   border-radius: 4px;
   font-family: "Consolas", "Monaco", monospace;
   font-size: 12px;

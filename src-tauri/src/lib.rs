@@ -168,8 +168,8 @@ fn build_miniserve_args(cfg: &ServerConfig) -> Result<Vec<String>, String> {
         args.push("-u".into());
     }
     if cfg.mkdir {
-        args.push("-M".into());
-        args.push(cfg.path.clone());
+        args.push("-u".into());
+        args.push("-U".into());
     }
     if cfg.media_controls {
         args.push("--media-controls".into());
@@ -374,12 +374,20 @@ async fn start_server(
     let args = build_miniserve_args(&config)?;
     info!("Starting miniserve with args: {:?}", args);
 
-    let mut child = Command::new(&engine_path)
+    let mut child = Command::new(&engine_path);
+    child
         .args(&args)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| e.to_string())?;
+        .stderr(Stdio::piped());
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        child.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let mut child = child.spawn().map_err(|e| e.to_string())?;
 
     // Read stdout and stderr output
     use std::io::{BufRead, BufReader};
