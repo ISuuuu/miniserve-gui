@@ -29,6 +29,12 @@ pub struct ServerConfig {
     pub compress: String,
     pub hidden: bool,
     pub thumbnails: bool,
+    #[serde(default)]
+    pub random_route: bool,
+    #[serde(default)]
+    pub readme: bool,
+    #[serde(default)]
+    pub download: bool,
 }
 
 impl Default for ServerConfig {
@@ -49,6 +55,9 @@ impl Default for ServerConfig {
             compress: "".into(),
             hidden: false,
             thumbnails: false,
+            random_route: false,
+            readme: false,
+            download: false,
         }
     }
 }
@@ -199,6 +208,15 @@ fn build_miniserve_args(cfg: &ServerConfig) -> Result<Vec<String>, String> {
     }
     if cfg.thumbnails {
         args.push("--thumbnails".into());
+    }
+    if cfg.random_route {
+        args.push("--random-route".into());
+    }
+    if cfg.readme {
+        args.push("--readme".into());
+    }
+    if cfg.download {
+        args.push("-z".into());
     }
 
     Ok(args)
@@ -394,13 +412,33 @@ async fn start_server(
     let stdout = child.stdout.take().map(|s| BufReader::new(s));
     let stderr = child.stderr.take().map(|s| BufReader::new(s));
 
-    // Log stdout in background
+    // For capturing random route from stdout
+    let (tx_route, rx_route) = std::sync::mpsc::channel();
+
+    // Log stdout in background and capture random route
     let engine_path_for_log = engine_path.clone();
     let args_for_log = args.clone();
+    let capture_route = config.random_route;
+    let target_port = config.port;
     std::thread::spawn(move || {
         if let Some(stdout) = stdout {
             for line in stdout.lines().map_while(Result::ok) {
-                log::info!("[miniserve stdout] {}", line);
+                let trimmed = line.trim();
+                log::info!("[miniserve stdout] {}", trimmed);
+                // Try to capture random route from output like:
+                // "http://192.168.6.133:8080/857613"
+                if capture_route {
+                    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+                        // Extract path part after port
+                        let port_str = format!(":{}", target_port);
+                        if let Some(port_pos) = trimmed.find(&port_str) {
+                            let path_part = trimmed[port_pos + port_str.len()..].trim_end_matches('/');
+                            if !path_part.is_empty() {
+                                let _ = tx_route.send(path_part.to_string());
+                            }
+                        }
+                    }
+                }
             }
         }
     });
@@ -434,16 +472,27 @@ async fn start_server(
 
     let pid = child.id();
 
+    // 尝试获取随机路由（如果有的话）
+    let random_route = if config.random_route {
+        let route = rx_route.recv_timeout(std::time::Duration::from_millis(500)).ok();
+        log::info!("[debug] received route: {:?}", route);
+        route
+    } else {
+        None
+    };
+
     // 生成所有可访问的 URL
+    let route_suffix = random_route.clone().unwrap_or_default();
+    log::info!("[debug] final route_suffix: {}", route_suffix);
     let urls: Vec<String> = if config.interfaces == "0.0.0.0" {
         let ips = get_local_ips();
         if ips.is_empty() {
-            vec![format!("http://127.0.0.1:{}", config.port)]
+            vec![format!("http://127.0.0.1:{}{}", config.port, route_suffix)]
         } else {
-            ips.iter().map(|ip| format!("http://{}:{}", ip, config.port)).collect()
+            ips.iter().map(|ip| format!("http://{}:{}{}", ip, config.port, route_suffix)).collect()
         }
     } else {
-        vec![format!("http://{}:{}", config.interfaces, config.port)]
+        vec![format!("http://{}:{}{}", config.interfaces, config.port, route_suffix)]
     };
 
     let url = urls.first().cloned();
