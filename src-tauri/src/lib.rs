@@ -14,6 +14,120 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
 
+// ============ Windows Job Object (防止子进程成为孤儿) ============
+
+#[cfg(windows)]
+mod job_object {
+    use std::ffi::c_void;
+
+    type HANDLE = *mut c_void;
+    type BOOL = i32;
+
+    const JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: u32 = 0x2000;
+
+    /// JOBOBJECT_BASIC_LIMIT_INFORMATION on x64
+    #[repr(C)]
+    struct BasicLimitInfo {
+        per_process_user_time_limit: i64,   // LARGE_INTEGER
+        per_job_user_time_limit: i64,       // LARGE_INTEGER
+        limit_flags: u32,                   // DWORD
+        _pad1: u32,                         // padding for SIZE_T alignment
+        minimum_working_set_size: usize,    // SIZE_T
+        maximum_working_set_size: usize,    // SIZE_T
+        active_process_limit: u32,          // DWORD
+        _pad2: u32,                         // padding for ULONG_PTR alignment
+        affinity: usize,                    // ULONG_PTR
+        priority_class: u32,                // DWORD
+        scheduling_class: u32,              // DWORD
+    }
+
+    /// JOBOBJECT_EXTENDED_LIMIT_INFORMATION on x64 (144 bytes)
+    #[repr(C)]
+    struct ExtendedLimitInfo {
+        basic: BasicLimitInfo,              // 64 bytes
+        io_counters: [u8; 48],              // IO_COUNTERS
+        process_memory_limit: usize,
+        job_memory_limit: usize,
+        peak_process_memory_used: usize,
+        peak_job_memory_used: usize,
+    }
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn CreateJobObjectW(lp_job_attributes: *const c_void, lp_name: *const u16) -> HANDLE;
+        fn SetInformationJobObject(
+            h_job: HANDLE,
+            job_object_info_class: i32,
+            lp_job_object_info: *const c_void,
+            cb_job_object_info_length: u32,
+        ) -> BOOL;
+        fn AssignProcessToJobObject(h_job: HANDLE, h_process: HANDLE) -> BOOL;
+        fn CloseHandle(h_object: HANDLE) -> BOOL;
+    }
+
+    /// 创建一个 Job Object，设置 KILL_ON_JOB_CLOSE 标志
+    /// 当最后一个句柄关闭时，所有子进程会被自动杀死
+    pub fn create_kill_on_close_job() -> Result<HANDLE, String> {
+        unsafe {
+            let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+            if job.is_null() {
+                return Err(format!(
+                    "CreateJobObjectW failed: {}",
+                    std::io::Error::last_os_error()
+                ));
+            }
+
+            let mut info: ExtendedLimitInfo = std::mem::zeroed();
+            info.basic.limit_flags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+
+            // JobObjectExtendedLimitInformation = 9
+            let ret = SetInformationJobObject(
+                job,
+                9,
+                &info as *const _ as *const c_void,
+                std::mem::size_of::<ExtendedLimitInfo>() as u32,
+            );
+            if ret == 0 {
+                let err = std::io::Error::last_os_error();
+                log::error!(
+                    "[JobObject] SetInformationJobObject failed: {} (size={})",
+                    err,
+                    std::mem::size_of::<ExtendedLimitInfo>()
+                );
+                let _ = CloseHandle(job);
+                return Err(format!("SetInformationJobObject failed: {}", err));
+            }
+
+            log::info!(
+                "[JobObject] Created OK (size={})",
+                std::mem::size_of::<ExtendedLimitInfo>()
+            );
+            Ok(job)
+        }
+    }
+
+    /// 将子进程分配到 Job Object
+    pub fn assign_process_to_job(job: HANDLE, process_handle: HANDLE) -> Result<(), String> {
+        unsafe {
+            let ret = AssignProcessToJobObject(job, process_handle);
+            if ret == 0 {
+                return Err(format!(
+                    "AssignProcessToJobObject failed: {}",
+                    std::io::Error::last_os_error()
+                ));
+            }
+            Ok(())
+        }
+    }
+
+    /// 关闭 Job Object 句柄（会触发 KILL_ON_JOB_CLOSE）
+    pub fn close_job(job: HANDLE) {
+        unsafe {
+            let _ = CloseHandle(job);
+        }
+    }
+}
+
 // ============ Types ============
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,13 +206,23 @@ pub struct QrCodeResponse {
 pub struct AppState {
     pub child: Mutex<Option<Child>>,
     pub server_url: Mutex<Option<String>>,
+    #[cfg(windows)]
+    pub job_handle: Mutex<Option<*mut std::ffi::c_void>>,
 }
+
+// SAFETY: job_handle is protected by Mutex, and Win32 handles are safe to send between threads
+#[cfg(windows)]
+unsafe impl Send for AppState {}
+#[cfg(windows)]
+unsafe impl Sync for AppState {}
 
 impl Default for AppState {
     fn default() -> Self {
         Self {
             child: Mutex::new(None),
             server_url: Mutex::new(None),
+            #[cfg(windows)]
+            job_handle: Mutex::new(None),
         }
     }
 }
@@ -388,12 +512,20 @@ async fn start_server(
     state: State<'_, AppState>,
     app_handle: AppHandle,
 ) -> Result<ServerStatus, String> {
-    // Kill existing
+    // Kill existing and clean up job object
     {
         let mut child_guard = state.child.lock().map_err(|e| e.to_string())?;
         if let Some(mut c) = child_guard.take() {
             let _ = c.kill();
             let _ = c.wait();
+        }
+    }
+    #[cfg(windows)]
+    {
+        if let Ok(mut job_guard) = state.job_handle.lock() {
+            if let Some(job) = job_guard.take() {
+                job_object::close_job(job);
+            }
         }
     }
 
@@ -419,6 +551,20 @@ async fn start_server(
     }
 
     let mut child = child.spawn().map_err(|e| e.to_string())?;
+
+    // Windows: Create Job Object and assign child process
+    // This ensures child processes are killed when parent exits unexpectedly
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawHandle;
+        let job = job_object::create_kill_on_close_job()?;
+        let process_handle = child.as_raw_handle();
+        job_object::assign_process_to_job(job, process_handle as *mut _)?;
+        if let Ok(mut job_guard) = state.job_handle.lock() {
+            *job_guard = Some(job);
+        }
+        log::info!("Child process assigned to job object (kill-on-close)");
+    }
 
     // Read stdout and stderr output
     use std::io::{BufRead, BufReader};
@@ -541,6 +687,14 @@ async fn stop_server(state: State<'_, AppState>, app_handle: AppHandle) -> Resul
         let mut url_guard = state.server_url.lock().map_err(|e| e.to_string())?;
         *url_guard = None;
     }
+    #[cfg(windows)]
+    {
+        if let Ok(mut job_guard) = state.job_handle.lock() {
+            if let Some(job) = job_guard.take() {
+                job_object::close_job(job);
+            }
+        }
+    }
     let _ = app_handle.emit("server-stopped", ());
     Ok(())
 }
@@ -624,6 +778,21 @@ pub fn run() {
                         }
                     }
                     "quit" => {
+                        let state = app.state::<AppState>();
+                        if let Ok(mut child_guard) = state.child.lock() {
+                            if let Some(mut c) = child_guard.take() {
+                                let _ = c.kill();
+                                let _ = c.wait();
+                            }
+                        }
+                        #[cfg(windows)]
+                        {
+                            if let Ok(mut job_guard) = state.job_handle.lock() {
+                                if let Some(job) = job_guard.take() {
+                                    job_object::close_job(job);
+                                }
+                            }
+                        }
                         app.exit(0);
                     }
                     _ => {}
