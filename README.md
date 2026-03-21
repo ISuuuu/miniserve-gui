@@ -1,6 +1,6 @@
 # miniserve-gui
 
-跨平台的 [miniserve](https://github.com/svenstaro/miniserve) 提供跨平台的图形化界面客户端。
+跨平台的 [miniserve](https://github.com/svenstaro/miniserve) 提供图形化界面客户端。
 
 ## 功能特性
 
@@ -19,11 +19,11 @@
 | | `-i, --interfaces` | 绑定网卡（0.0.0.0 或 127.0.0.1）|
 | 安全控制 | `-a, --auth` | 用户名:密码 认证 |
 | | `-u, --upload` | 允许访客上传文件 |
-| | `-M, --mkdir` | 允许创建目录 |
+| | ` -u -U` | 允许创建目录 |
 | 界面展示 | `--color-scheme` | 配色主题（squirrel", "archlinux", "zenburn", "monokai）|
 | | `--title` | 网页标题 |
 | 高级进阶  
-| | `-H, --hidden` | 显示隐藏文件 |
+| | `-H, --hidden` | 显示隐藏文件(只是.开头的文件？) |
 
 ## 技术栈
 

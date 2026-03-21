@@ -13,7 +13,7 @@
     "windows": [
       {
         "title": "miniserve-gui",
-        "width": 900,
+        "width": 1100,
         "height": 700,
         "center": true
       }
