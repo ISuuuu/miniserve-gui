@@ -288,6 +288,14 @@ async function checkForUpdates() {
     const update = await check();
     
     if (update) {
+      let installDir = "";
+      try {
+        installDir = await invoke("get_install_dir");
+      } catch (e) {
+        console.warn("无法获取安装目录:", e);
+      }
+      const installerArgs = installDir ? ['/S', `/D=${installDir}`] : undefined;
+
       ElMessage.success(`发现新版本 v${update.version}，正在下载并安装...`);
       await update.downloadAndInstall((event) => {
         switch (event.event) {
@@ -301,7 +309,7 @@ async function checkForUpdates() {
             addLog('下载完成');
             break;
         }
-      });
+      }, { installerArgs });
       ElMessage.success('更新完成，即将重启...');
       const { relaunch } = await import('@tauri-apps/plugin-process');
       await relaunch();
