@@ -180,7 +180,7 @@ jobs:
             platform=""
             if [[ "$file_name" == *"-setup.exe" ]]; then
               platform="windows-x86_64"
-            elif [[ "$file_name" == *".AppImage.tar.gz" ]] || [[ "$file_name" == *"amd64.AppImage.tar.gz" ]]; then
+            elif [[ "$file_name" == *".AppImage" ]]; then
               platform="linux-x86_64"
             else
                continue
