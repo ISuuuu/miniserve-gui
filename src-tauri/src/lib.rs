@@ -785,6 +785,18 @@ async fn generate_qr(data: String) -> Result<QrCodeResponse, String> {
     })
 }
 
+#[tauri::command]
+fn get_install_dir() -> Result<String, String> {
+    std::env::current_exe()
+        .and_then(|p| {
+            p.parent()
+                .map(|p| p.to_path_buf())
+                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "No parent dir"))
+        })
+        .map(|p| p.to_string_lossy().to_string())
+        .map_err(|e| e.to_string())
+}
+
 // ============ App Entry ============
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -883,6 +895,7 @@ pub fn run() {
             stop_server,
             get_server_status,
             generate_qr,
+            get_install_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
