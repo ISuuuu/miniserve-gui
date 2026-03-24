@@ -11,6 +11,10 @@ on:
         required: true
         default: "v0.1.0"
         type: string
+      body:
+        description: "Release notes / 更新说明 (留空则自动根据 Commit 生成)"
+        required: false
+        type: string
 
 jobs:
   build:
@@ -87,9 +91,13 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
           tagName: ${{ github.event.inputs.version || github.ref_name }}
           releaseName: "miniserve-gui ${{ github.event.inputs.version || github.ref_name }}"
-          releaseDraft: true
+          releaseBody: ${{ github.event.inputs.body }}
+          releaseDraft: false
           prerelease: false
+          generateReleaseNotes: true
           args: --target ${{ matrix.target }}

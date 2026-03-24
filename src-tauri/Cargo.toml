@@ -37,6 +37,8 @@ dirs = "5"
 if-addrs = "0.13"
 log = "0.4"
 env_logger = "0.11"
+tauri-plugin-updater = "2.10.0"
+tauri-plugin-process = "2.3.1"
 
 [profile.release]
 strip = true       # 剔除调试信息（最有效，能砍掉 70% 体积）
