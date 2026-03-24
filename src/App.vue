@@ -96,8 +96,8 @@ const colorSchemes = [
 
 
 const interfaceOptions = [
-  { label: "所有网卡 (0.0.0.0)", value: "0.0.0.0" },
-  { label: "本地回环 (127.0.0.1)", value: "127.0.0.1" },
+  { label: "所有网卡", value: "::" },
+  { label: "仅本机 (127.0.0.1)", value: "127.0.0.1" },
 ];
 
 // ============ Engine Management ============
@@ -133,6 +133,10 @@ async function downloadEngine() {
 async function loadConfig() {
   try {
     const saved = await invoke<ServerConfig>("load_config");
+    // 兼容老版本配置：统一升级为双栈监听
+    if (saved && saved.interfaces === "0.0.0.0") {
+      saved.interfaces = "::";
+    }
     Object.assign(config, saved);
   } catch (e) {
     console.error("Failed to load config:", e);
@@ -237,6 +241,16 @@ async function copyUrl(url?: string) {
     ElMessage.success("链接已复制");
   } catch {
     ElMessage.error("复制失败");
+  }
+}
+
+async function openUrl(url: string) {
+  try {
+    const { openUrl: tauriOpenUrl } = await import('@tauri-apps/plugin-opener');
+    await tauriOpenUrl(url);
+  } catch (e) {
+    console.error("Failed to open URL:", e);
+    ElMessage.error("调用浏览器失败: " + e);
   }
 }
 
@@ -580,7 +594,7 @@ onMounted(async () => {
                 @mouseenter="hoveredIdx = idx"
                 @mouseleave="hoveredIdx = null"
               >
-                <el-link type="primary" :href="url" target="_blank">
+                <el-link type="primary" :href="url" @click.prevent="openUrl(url)">
                   {{ url }}
                 </el-link>
                 <el-button type="primary" size="small" text @click="copyUrl(url)">
@@ -785,6 +799,9 @@ onMounted(async () => {
   justify-content: center;
   background: #fafafa;
   border-radius: 8px;
+  position: sticky;
+  top: 16px;
+  align-self: flex-start;
 }
 
 .qr-display {

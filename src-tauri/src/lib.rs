@@ -246,27 +246,47 @@ fn get_config_path() -> PathBuf {
 
 fn get_local_ips() -> Vec<String> {
     use std::net::IpAddr;
-    let mut ips = Vec::new();
+    let mut ips_v4 = Vec::new();
+    let mut ips_v6 = Vec::new();
 
     if let Ok(interfaces) = if_addrs::get_if_addrs() {
         for iface in interfaces {
-            // 只取 IPv4，跳过回环地址
-            if let IpAddr::V4(ipv4) = iface.addr.ip() {
-                if !ipv4.is_loopback() {
-                    ips.push(ipv4.to_string());
+            match iface.addr.ip() {
+                IpAddr::V4(ipv4) => {
+                    if !ipv4.is_loopback() {
+                        ips_v4.push(ipv4.to_string());
+                    }
+                }
+                IpAddr::V6(ipv6) => {
+                    if !ipv6.is_loopback() {
+                        let segs = ipv6.segments();
+                        let first = segs[0];
+                        // Filter out internal IPv6:
+                        // fe80::/10 link-local
+                        let is_link_local = (first & 0xffc0) == 0xfe80;
+                        // fc00::/7 unique local (ULA - internal network)
+                        let is_ula = (first & 0xfe00) == 0xfc00;
+                        // fec0::/10 site local (deprecated)
+                        let is_site_local = (first & 0xffc0) == 0xfec0;
+
+                        if !is_link_local && !is_ula && !is_site_local {
+                            ips_v6.push(format!("[{}]", ipv6.to_string()));
+                        }
+                    }
                 }
             }
         }
     }
 
     // 如果获取失败，回退到 UDP 方式
-    if ips.is_empty() {
+    if ips_v4.is_empty() {
         if let Some(ip) = get_local_ip_fallback() {
-            ips.push(ip);
+            ips_v4.push(ip);
         }
     }
 
-    ips
+    ips_v4.extend(ips_v6);
+    ips_v4
 }
 
 fn get_local_ip_fallback() -> Option<String> {
@@ -290,8 +310,15 @@ fn build_miniserve_args(cfg: &ServerConfig) -> Result<Vec<String>, String> {
     args.push(cfg.port.to_string());
 
     // Interface
-    args.push("-i".into());
-    args.push(cfg.interfaces.clone());
+    if cfg.interfaces == "::" {
+        args.push("-i".into());
+        args.push("0.0.0.0".into());
+        args.push("-i".into());
+        args.push("::".into());
+    } else {
+        args.push("-i".into());
+        args.push(cfg.interfaces.clone());
+    }
 
     // Auth
     if let (Some(u), Some(p)) = (&cfg.auth_username, &cfg.auth_password) {
@@ -688,14 +715,18 @@ async fn start_server(
     // 生成所有可访问的 URL
     let route_suffix = random_route.clone().unwrap_or_default();
     log::info!("[debug] final route_suffix: {}", route_suffix);
-    let urls: Vec<String> = if config.interfaces == "0.0.0.0" {
+    let urls: Vec<String> = if config.interfaces == "0.0.0.0" || config.interfaces == "::" {
         let ips = get_local_ips();
         if ips.is_empty() {
             vec![format!("http://127.0.0.1:{}{}", config.port, route_suffix)]
         } else {
             ips.iter().map(|ip| format!("http://{}:{}{}", ip, config.port, route_suffix)).collect()
         }
+    } else if config.interfaces.contains(':') && !config.interfaces.starts_with('[') {
+        // Specific IPv6 address
+        vec![format!("http://[{}]:{}{}", config.interfaces, config.port, route_suffix)]
     } else {
+        // Specific IPv4 address
         vec![format!("http://{}:{}{}", config.interfaces, config.port, route_suffix)]
     };
 
