@@ -117,21 +117,22 @@ jobs:
           prerelease: false
           generateReleaseNotes: true
 
-      - name: Debug - Check build artifacts
+      - name: Debug - Check signing env
         if: always()
         shell: bash
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
-          echo "=== Checking for signature files ==="
-          find . -name "*.sig" -o -name "*.sig.zip" 2>/dev/null || echo "No .sig files found"
-          echo ""
-          echo "=== Checking for updater json ==="
-          find . -name "*.json" -path "*/bundle/*" 2>/dev/null || echo "No json in bundle"
-          echo ""
-          echo "=== Checking target/release/bundle ==="
-          ls -la target/release/bundle/ 2>/dev/null || echo "No bundle directory"
-          echo ""
-          echo "=== All files in target directory ==="
-          find target -name "*.json" -o -name "*.sig" 2>/dev/null | head -50
+          echo "=== TAURI_SIGNING_PRIVATE_KEY status ==="
+          if [ -z "$KEY" ]; then
+            echo "EMPTY or NOT SET"
+          else
+            echo "SET - starts with: ${KEY:0:50}"
+          fi
           echo ""
           echo "=== tauri.conf.json pubkey ==="
-          cat src-tauri/tauri.conf.json | grep -A2 pubkey
+          grep pubkey src-tauri/tauri.conf.json || echo "No pubkey"
+          echo ""
+          echo "=== Build artifacts ==="
+          ls -la src-tauri/target/release/bundle/nsis/ 2>/dev/null || echo "No nsis dir"
+          ls -la src-tauri/target/release/bundle/wix/ 2>/dev/null || echo "No wix dir"
