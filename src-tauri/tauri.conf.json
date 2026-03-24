@@ -41,6 +41,7 @@
         ]
       },
       "nsis": {
+        "installMode": "perMachine",
         "languages": [
           "SimpChinese"
         ]
