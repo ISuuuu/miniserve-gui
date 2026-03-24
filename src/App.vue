@@ -309,6 +309,7 @@ async function checkForUpdates() {
             addLog('下载完成');
             break;
         }
+        // @ts-expect-error plugin-updater hasn't provided type definitions for installerArgs, but it's supported by Tauri backend or config.
       }, { installerArgs });
       ElMessage.success('更新完成，即将重启...');
       const { relaunch } = await import('@tauri-apps/plugin-process');

@@ -117,41 +117,17 @@ jobs:
           prerelease: false
           generateReleaseNotes: true
 
-      - name: Force Upload Signatures and generate latest.json
-        if: matrix.os == 'windows-latest'
+      - name: Upload Signatures Manually (Fallback)
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.event.inputs.version || github.ref_name }}
         run: |
-          set -e
-          echo "Uploading Windows signature files..."
-          # Fix v to avoid v in URLs if needed, but TAG has v
-          # tauri v2 generates .exe.sig directly in nsis dir
-          SIG_FILE=$(ls src-tauri/target/release/bundle/nsis/*-setup.exe.sig 2>/dev/null | head -n 1 || true)
-          if [ -f "$SIG_FILE" ]; then
-            gh release upload $TAG "$SIG_FILE" --clobber
-            SIG_CONTENT=$(cat "$SIG_FILE")
-            EXE_NAME=$(basename "${SIG_FILE%.sig}")
-            
-            # Generate latest.json
-            echo "{" > latest.json
-            echo "  \"version\": \"$TAG\"," >> latest.json
-            echo "  \"notes\": \"Update to $TAG\"," >> latest.json
-            echo "  \"pub_date\": \"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\"," >> latest.json
-            echo "  \"platforms\": {" >> latest.json
-            echo "    \"windows-x86_64\": {" >> latest.json
-            echo "      \"signature\": \"$SIG_CONTENT\"," >> latest.json
-            echo "      \"url\": \"https://github.com/${{ github.repository }}/releases/download/$TAG/$EXE_NAME\"" >> latest.json
-            echo "    }" >> latest.json
-            echo "  }" >> latest.json
-            echo "}" >> latest.json
-            echo "Generated latest.json:"
-            cat latest.json
-            gh release upload $TAG latest.json --clobber
-          else
-            echo "Signature file not found! tauri build failed to create it."
-          fi
+          echo "Uploading signature files..."
+          for sig in src-tauri/target/release/bundle/*/*.sig; do
+            [ -e "$sig" ] || continue
+            gh release upload "$TAG" "$sig" --clobber
+          done
 
       - name: Debug - Check signing env
         if: always()
@@ -172,3 +148,63 @@ jobs:
           echo "=== Build artifacts ==="
           ls -la src-tauri/target/release/bundle/nsis/ 2>/dev/null || echo "No nsis dir"
           ls -la src-tauri/target/release/bundle/wix/ 2>/dev/null || echo "No wix dir"
+
+  publish-updater:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Generate and upload latest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.version || github.ref_name }}
+        run: |
+          # 下载所有 build 阶段已上传的 .sig 签名文件
+          gh release download "$TAG" -p "*.sig" -R "${{ github.repository }}" || true
+          
+          # 初始化 latest.json
+          echo "{" > latest.json
+          echo "  \"version\": \"$TAG\"," >> latest.json
+          echo "  \"notes\": \"Update to $TAG\"," >> latest.json
+          echo "  \"pub_date\": \"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\"," >> latest.json
+          echo "  \"platforms\": {" >> latest.json
+          
+          first=true
+          for sig_file in *.sig; do
+            if [ "$sig_file" = "*.sig" ]; then break; fi
+            
+            sig_content=$(cat "$sig_file")
+            file_name="${sig_file%.sig}"
+            
+            platform=""
+            if [[ "$file_name" == *"-setup.exe" ]]; then
+              platform="windows-x86_64"
+            elif [[ "$file_name" == *".AppImage.tar.gz" ]] || [[ "$file_name" == *"amd64.AppImage.tar.gz" ]]; then
+              platform="linux-x86_64"
+            else
+               continue
+            fi
+            
+            url="https://github.com/${{ github.repository }}/releases/download/$TAG/$file_name"
+            
+            if [ "$first" = true ]; then
+              first=false
+            else
+              echo "    ," >> latest.json
+            fi
+            
+            echo "    \"$platform\": {" >> latest.json
+            echo "      \"signature\": \"$sig_content\"," >> latest.json
+            echo "      \"url\": \"$url\"" >> latest.json
+            echo "    }" >> latest.json
+          done
+          
+          echo "  }" >> latest.json
+          echo "}" >> latest.json
+          
+          echo "Generated latest.json:"
+          cat latest.json
+          
+          # 统一覆盖上传最终版 latest.json
+          gh release upload "$TAG" latest.json --clobber -R "${{ github.repository }}"
