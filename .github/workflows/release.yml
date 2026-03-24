@@ -115,4 +115,3 @@ jobs:
           releaseDraft: false
           prerelease: false
           generateReleaseNotes: true
-          args: --target ${{ matrix.target }}
