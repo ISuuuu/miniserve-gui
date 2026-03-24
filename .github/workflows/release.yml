@@ -87,6 +87,17 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install
 
+      - name: Check Signing Secret
+        env:
+          SIGN_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SIGN_KEY" ]; then
+            echo "::error::TAURI_PRIVATE_KEY is empty or missing! The updater will not be built."
+            exit 1
+          else
+            echo "TAURI_PRIVATE_KEY is present."
+          fi
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
