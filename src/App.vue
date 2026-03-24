@@ -3,7 +3,8 @@ import { ref, reactive, onMounted, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ElMessage } from "element-plus";
-import { FolderOpened, Download, VideoPlay, VideoPause, Refresh, DocumentCopy } from "@element-plus/icons-vue";
+import { FolderOpened, Download, VideoPlay, VideoPause, Refresh, DocumentCopy, InfoFilled } from "@element-plus/icons-vue";
+import { getVersion } from "@tauri-apps/api/app";
 
 // ============ Types ============
 
@@ -59,6 +60,10 @@ const serverUrls = ref<string[]>([]);
 const logs = ref<string[]>([]);
 const copySuccess = ref(false);
 const hoveredIdx = ref<number | null>(null);
+
+const appVersion = ref("");
+const aboutVisible = ref(false);
+const checkingUpdate = ref(false);
 
 const config = reactive<ServerConfig>({
   path: "",
@@ -274,9 +279,51 @@ watch(
   { deep: true }
 );
 
+// ============ App Update ============
+
+async function checkForUpdates() {
+  checkingUpdate.value = true;
+  try {
+    const { check } = await import('@tauri-apps/plugin-updater');
+    const update = await check();
+    
+    if (update) {
+      ElMessage.success(`发现新版本 v${update.version}，正在下载并安装...`);
+      await update.downloadAndInstall((event) => {
+        switch (event.event) {
+          case 'Started':
+            addLog(`开始下载更新 (大小: ${event.data.contentLength} 字节)`);
+            break;
+          case 'Progress':
+            addLog(`已下载: ${event.data.chunkLength} 字节`);
+            break;
+          case 'Finished':
+            addLog('下载完成');
+            break;
+        }
+      });
+      ElMessage.success('更新完成，即将重启...');
+      const { relaunch } = await import('@tauri-apps/plugin-process');
+      await relaunch();
+    } else {
+      ElMessage.info("已是最新版本");
+    }
+  } catch (e) {
+    ElMessage.error("检查更新失败: " + e);
+  } finally {
+    checkingUpdate.value = false;
+  }
+}
+
 // ============ Lifecycle ============
 
 onMounted(async () => {
+  try {
+    appVersion.value = await getVersion();
+  } catch (e) {
+    console.warn("无法获取 Tauri 版本", e);
+  }
+
   await checkEngine();
   await loadConfig();
   await checkServerStatus();
@@ -343,8 +390,39 @@ onMounted(async () => {
         >
           更新引擎
         </el-button>
+
+        <el-button
+          circle
+          size="small"
+          :icon="InfoFilled"
+          @click="aboutVisible = true"
+          title="关于软件"
+          style="margin-left: 10px;"
+        />
       </div>
     </header>
+
+    <!-- 关于软件 Dialog -->
+    <el-dialog v-model="aboutVisible" title="关于" width="400px" align-center>
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h3 style="margin-bottom: 5px;">miniserve-gui</h3>
+        <el-tag type="info" size="small" style="margin-bottom: 15px;">v{{ appVersion || '未知版本' }}</el-tag>
+        <p style="font-size: 13px; color: #606266; line-height: 1.6;">
+          一个轻量级的跨平台文件分享工具。<br/>
+          基于 Tauri 和 svenstaro/miniserve 构建。
+        </p>
+      </div>
+      <template #footer>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <el-button 
+            type="primary" 
+            @click="checkForUpdates" 
+            :loading="checkingUpdate"
+          >检查软件更新</el-button>
+          <el-button @click="aboutVisible = false">关闭</el-button>
+        </div>
+      </template>
+    </el-dialog>
 
     <el-progress
       v-if="downloading"
