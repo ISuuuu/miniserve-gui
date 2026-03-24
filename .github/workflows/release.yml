@@ -117,6 +117,44 @@ jobs:
           prerelease: false
           generateReleaseNotes: true
 
+      - name: Force Upload Signatures and generate latest.json
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.version || github.ref_name }}
+        run: |
+          set -e
+          echo "Uploading Windows signature files..."
+          # Fix v to avoid v in URLs if needed, but TAG has v
+          # tauri v2 generates .exe.sig directly in nsis dir
+          SIG_FILE=$(ls src-tauri/target/release/bundle/nsis/*-setup.exe.sig 2>/dev/null | head -n 1 || true)
+          if [ -f "$SIG_FILE" ]; then
+            gh release upload $TAG "$SIG_FILE" --clobber
+            SIG_CONTENT=$(cat "$SIG_FILE")
+            EXE_NAME=$(basename "${SIG_FILE%.sig}")
+            
+            # Generate latest.json
+            cat <<EOF > latest.json
+            {
+              "version": "$TAG",
+              "notes": "Update to $TAG",
+              "pub_date": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
+              "platforms": {
+                "windows-x86_64": {
+                  "signature": "$SIG_CONTENT",
+                  "url": "https://github.com/${{ github.repository }}/releases/download/$TAG/$EXE_NAME"
+                }
+              }
+            }
+            EOF
+            echo "Generated latest.json:"
+            cat latest.json
+            gh release upload $TAG latest.json --clobber
+          else
+            echo "Signature file not found! tauri build failed to create it."
+          fi
+
       - name: Debug - Check signing env
         if: always()
         shell: bash
