@@ -147,7 +147,7 @@ jobs:
                 }
               }
             }
-            EOF
+EOF
             echo "Generated latest.json:"
             cat latest.json
             gh release upload $TAG latest.json --clobber
