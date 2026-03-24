@@ -90,21 +90,21 @@ jobs:
       - name: Check Signing Secret
         shell: bash
         env:
-          SIGN_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          SIGN_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           if [ -z "$SIGN_KEY" ]; then
-            echo "::error::TAURI_PRIVATE_KEY is empty or missing! The updater will not be built."
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is empty or missing!"
             exit 1
           else
-            echo "TAURI_PRIVATE_KEY is present."
+            echo "TAURI_SIGNING_PRIVATE_KEY is present."
+            echo "Key starts with: ${SIGN_KEY:0:30}..."
           fi
 
       - name: Build Tauri app
+        id: build
         uses: tauri-apps/tauri-action@v0.5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
@@ -116,3 +116,22 @@ jobs:
           releaseDraft: false
           prerelease: false
           generateReleaseNotes: true
+
+      - name: Debug - Check build artifacts
+        if: always()
+        shell: bash
+        run: |
+          echo "=== Checking for signature files ==="
+          find . -name "*.sig" -o -name "*.sig.zip" 2>/dev/null || echo "No .sig files found"
+          echo ""
+          echo "=== Checking for updater json ==="
+          find . -name "*.json" -path "*/bundle/*" 2>/dev/null || echo "No json in bundle"
+          echo ""
+          echo "=== Checking target/release/bundle ==="
+          ls -la target/release/bundle/ 2>/dev/null || echo "No bundle directory"
+          echo ""
+          echo "=== All files in target directory ==="
+          find target -name "*.json" -o -name "*.sig" 2>/dev/null | head -50
+          echo ""
+          echo "=== tauri.conf.json pubkey ==="
+          cat src-tauri/tauri.conf.json | grep -A2 pubkey
