@@ -48,7 +48,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFBQUI3QTc0NTFGRjJDOEYKUldTUExQOVJkSHFycXVSaVd3OGMyakk2UWJRSzRrd1ZFWmYxQkgwTk5KNUdwSkNTUWt2R1dBZjIK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU2N0NEQjUzMTEwMDZCMjcKUldRbmF3QVJVOXQ4NW10L29kbkJ5Wk5wNjIzRDF6V1dTYWNtS09hdjUrVm1ubGtKVWRZT05YblAK",
       "endpoints": [
         "https://github.com/ISuuuu/miniserve-gui/releases/latest/download/latest.json"
       ]
