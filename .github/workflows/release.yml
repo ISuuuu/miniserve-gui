@@ -135,19 +135,17 @@ jobs:
             EXE_NAME=$(basename "${SIG_FILE%.sig}")
             
             # Generate latest.json
-            cat <<EOF > latest.json
-            {
-              "version": "$TAG",
-              "notes": "Update to $TAG",
-              "pub_date": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
-              "platforms": {
-                "windows-x86_64": {
-                  "signature": "$SIG_CONTENT",
-                  "url": "https://github.com/${{ github.repository }}/releases/download/$TAG/$EXE_NAME"
-                }
-              }
-            }
-EOF
+            echo "{" > latest.json
+            echo "  \"version\": \"$TAG\"," >> latest.json
+            echo "  \"notes\": \"Update to $TAG\"," >> latest.json
+            echo "  \"pub_date\": \"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\"," >> latest.json
+            echo "  \"platforms\": {" >> latest.json
+            echo "    \"windows-x86_64\": {" >> latest.json
+            echo "      \"signature\": \"$SIG_CONTENT\"," >> latest.json
+            echo "      \"url\": \"https://github.com/${{ github.repository }}/releases/download/$TAG/$EXE_NAME\"" >> latest.json
+            echo "    }" >> latest.json
+            echo "  }" >> latest.json
+            echo "}" >> latest.json
             echo "Generated latest.json:"
             cat latest.json
             gh release upload $TAG latest.json --clobber
