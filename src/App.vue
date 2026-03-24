@@ -165,7 +165,7 @@ async function startServer() {
     const urlsToShow = status.urls && status.urls.length > 0 ? status.urls : (status.url ? [status.url] : []);
     if (urlsToShow.length > 0) {
       addLog("服务已启动: " + urlsToShow.join(', '));
-      ElMessage.success("服务已启动: " + urlsToShow.join(', '));
+      ElMessage.success("服务已启动:");
       serverUrls.value = urlsToShow;
       // 为每个 URL 生成二维码
       qrCodes.value = await Promise.all(
@@ -328,6 +328,7 @@ onMounted(async () => {
           :icon="Download"
           @click="downloadEngine"
           :loading="downloading"
+          :disabled="serverStatus?.running"
         >
           {{ downloading ? `下载中 ${progress.toFixed(0)}%` : "下载引擎" }}
         </el-button>
@@ -338,6 +339,7 @@ onMounted(async () => {
           :icon="Refresh"
           @click="downloadEngine"
           :loading="downloading"
+          :disabled="serverStatus?.running"
         >
           更新引擎
         </el-button>

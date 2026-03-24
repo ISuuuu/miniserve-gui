@@ -384,7 +384,16 @@ async fn get_engine_status() -> Result<EngineStatus, String> {
 }
 
 #[tauri::command]
-async fn download_engine(app_handle: AppHandle) -> Result<String, String> {
+async fn download_engine(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    {
+        let child_guard = state.child.lock().map_err(|e| e.to_string())?;
+        if child_guard.is_some() {
+            return Err("服务正在运行中，请先停止服务再更新引擎".into());
+        }
+    }
     let client = reqwest::Client::builder()
         .user_agent("miniserve-gui-downloader")
         .build()
@@ -401,14 +410,50 @@ async fn download_engine(app_handle: AppHandle) -> Result<String, String> {
         browser_download_url: String,
     }
 
-    let release: Release = client
+    let response = client
         .get("https://api.github.com/repos/svenstaro/miniserve/releases/latest")
         .send()
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
+
+    if !response.status().is_success() {
+        let err_text = response.text().await.unwrap_or_default();
+        #[derive(Deserialize, Debug)]
+        struct GithubError {
+            message: String,
+        }
+        let msg = if let Ok(gh_err) = serde_json::from_str::<GithubError>(&err_text) {
+            gh_err.message
+        } else {
+            err_text
+        };
+        return Err(format!("获取版本失败: {}", msg));
+    }
+
+    let release: Release = response
         .json()
         .await
         .map_err(|e| e.to_string())?;
+
+    let dest_path = get_engine_path();
+    if dest_path.exists() {
+        let mut cmd = Command::new(&dest_path);
+        cmd.arg("--version");
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+        if let Ok(output) = cmd.output() {
+            let version_str = String::from_utf8_lossy(&output.stdout);
+            let current_ver = version_str.trim().replace("miniserve ", "");
+            let latest_ver = release.tag_name.trim_start_matches('v');
+            if current_ver == latest_ver {
+                return Ok(format!("已是最新版本 (v{})", latest_ver));
+            }
+        }
+    }
 
     let target_os = env::consts::OS;
     let pattern = match target_os {
