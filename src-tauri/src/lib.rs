@@ -827,33 +827,8 @@ fn get_install_dir() -> Result<String, String> {
         .map(|p| p.to_string_lossy().to_string())
         .map_err(|e| e.to_string())?;
 
-    #[cfg(windows)]
-    {
-        use std::os::windows::ffi::{OsStrExt, OsStringExt};
-        let wide_path: Vec<u16> = std::ffi::OsStr::new(&dir)
-            .encode_wide()
-            .chain(std::iter::once(0))
-            .collect();
-        
-        extern "system" {
-            fn GetShortPathNameW(long_path: *const u16, short_path: *mut u16, buffer_size: u32) -> u32;
-        }
-        
-        unsafe {
-            let req_len = GetShortPathNameW(wide_path.as_ptr(), std::ptr::null_mut(), 0);
-            if req_len > 0 {
-                let mut buf = vec![0u16; req_len as usize];
-                let res_len = GetShortPathNameW(wide_path.as_ptr(), buf.as_mut_ptr(), req_len);
-                if res_len > 0 {
-                    // res_len ignores null terminator
-                    return Ok(std::ffi::OsString::from_wide(&buf[..res_len as usize])
-                        .to_string_lossy()
-                        .to_string());
-                }
-            }
-        }
-    }
-
+    // Return the original long path directly without short path conversion
+    // NSIS /D= parameter supports long paths with spaces
     Ok(dir)
 }
 
