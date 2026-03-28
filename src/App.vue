@@ -64,7 +64,6 @@ const hoveredIdx = ref<number | null>(null);
 const appVersion = ref("");
 const aboutVisible = ref(false);
 const checkingUpdate = ref(false);
-const installDir = ref("");
 
 const config = reactive<ServerConfig>({
   path: "",
@@ -310,8 +309,6 @@ async function checkForUpdates() {
         console.warn("无法获取安装目录:", e);
       }
       const installerArgs = installDir ? ['/S', `/D=${installDir}`] : undefined;
-      addLog(`安装目录: ${installDir}`);
-      addLog(`安装参数: ${JSON.stringify(installerArgs)}`);
 
       ElMessage.success(`发现新版本 v${update.version}，正在下载并安装...`);
       await update.downloadAndInstall((event) => {
@@ -348,12 +345,6 @@ onMounted(async () => {
     appVersion.value = await getVersion();
   } catch (e) {
     console.warn("无法获取 Tauri 版本", e);
-  }
-
-  try {
-    installDir.value = await invoke("get_install_dir");
-  } catch (e) {
-    console.warn("无法获取安装目录", e);
   }
 
   await checkEngine();
@@ -443,11 +434,6 @@ onMounted(async () => {
           一个轻量级的跨平台文件分享工具。<br/>
           基于 Tauri 和 svenstaro/miniserve 构建。
         </p>
-        <div style="margin-top: 15px; padding: 10px; background: #f5f7fa; border-radius: 4px; text-align: left;">
-          <p style="font-size: 12px; color: #606266; margin: 0;">
-            <strong>安装目录：</strong>{{ installDir || '获取中...' }}
-          </p>
-        </div>
       </div>
       <template #footer>
         <div style="display: flex; justify-content: space-between; align-items: center;">
