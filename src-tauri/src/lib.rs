@@ -440,11 +440,16 @@ async fn download_engine(
         browser_download_url: String,
     }
 
-    let response = client
-        .get("https://api.github.com/repos/svenstaro/miniserve/releases/latest")
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
+    let original_url = "https://api.github.com/repos/svenstaro/miniserve/releases/latest";
+    let proxy_url = format!("https://github.369900.xyz/{}", original_url);
+
+    let response = match client.get(original_url).send().await {
+        Ok(resp) if resp.status().is_success() => resp,
+        _ => {
+            info!("直连失败，尝试使用代理: {}", proxy_url);
+            client.get(&proxy_url).send().await.map_err(|e| format!("代理也无法访问: {}", e))?
+        }
+    };
 
     if !response.status().is_success() {
         let err_text = response.text().await.unwrap_or_default();
@@ -505,11 +510,16 @@ async fn download_engine(
         .find(|a| a.name.contains(pattern))
         .ok_or("No matching binary found")?;
 
-    let mut response = client
-        .get(&asset.browser_download_url)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
+    let download_url = &asset.browser_download_url;
+    let proxy_download_url = format!("https://github.369900.xyz/{}", download_url);
+
+    let mut response = match client.get(download_url).send().await {
+        Ok(resp) if resp.status().is_success() => resp,
+        _ => {
+            info!("直连下载失败，尝试使用代理: {}", proxy_download_url);
+            client.get(&proxy_download_url).send().await.map_err(|e| format!("代理下载失败: {}", e))?
+        }
+    };
 
     let total_size = response.content_length().unwrap_or(0);
 
