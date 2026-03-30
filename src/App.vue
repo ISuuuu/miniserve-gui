@@ -303,47 +303,142 @@ watch(
 
 // ============ App Update ============
 
+interface UpdaterConfig {
+  endpoints: string[];
+  proxy: string | null;
+}
+
 async function checkForUpdates() {
   checkingUpdate.value = true;
+
+  let originalUrl = "";
+  let proxyPrefix = "";
+  try {
+    const config = await invoke<UpdaterConfig>("get_updater_config");
+    originalUrl = config.endpoints[0] || "";
+    proxyPrefix = config.proxy || "";
+  } catch (e) {
+    ElMessage.error("获取更新配置失败: " + e);
+    checkingUpdate.value = false;
+    return;
+  }
+
+  const proxyUrl = proxyPrefix ? `${proxyPrefix}${originalUrl}` : "";
+
   try {
     const { check } = await import('@tauri-apps/plugin-updater');
     const update = await check();
-    
-    if (update) {
-      let installDir = "";
-      try {
-        installDir = await invoke("get_install_dir");
-      } catch (e) {
-        console.warn("无法获取安装目录:", e);
-      }
-      const installerArgs = installDir ? ['/S', `/D=${installDir}`] : undefined;
 
-      ElMessage.success(`发现新版本 v${update.version}，正在下载并安装...`);
-      await update.downloadAndInstall((event) => {
-        switch (event.event) {
-          case 'Started':
-            addLog(`开始下载更新 (大小: ${event.data.contentLength} 字节)`);
-            break;
-          case 'Progress':
-            addLog(`已下载: ${event.data.chunkLength} 字节`);
-            break;
-          case 'Finished':
-            addLog('下载完成');
-            break;
-        }
-        // @ts-expect-error plugin-updater hasn't provided type definitions for installerArgs, but it's supported by Tauri backend or config.
-      }, { installerArgs });
-      ElMessage.success('更新完成，即将重启...');
-      const { relaunch } = await import('@tauri-apps/plugin-process');
-      await relaunch();
+    if (update) {
+      await installUpdate(update);
     } else {
       ElMessage.info("已是最新版本");
     }
   } catch (e) {
-    ElMessage.error("检查更新失败: " + e);
+    if (!proxyUrl) {
+      ElMessage.error("检查更新失败: " + e);
+      checkingUpdate.value = false;
+      return;
+    }
+    // 直连失败，尝试通过代理获取更新信息
+    addLog("直连失败，尝试使用代理: " + proxyUrl);
+    try {
+      const resp = await fetch(proxyUrl);
+      if (!resp.ok) {
+        throw new Error(`代理响应异常: ${resp.status}`);
+      }
+      const updateJson = await resp.json();
+
+      // 检查版本
+      const currentVersion = appVersion.value;
+      const latestVersion = updateJson.version;
+      if (latestVersion && latestVersion !== currentVersion) {
+        addLog(`发现新版本 v${latestVersion} (当前: v${currentVersion})`);
+
+        // 获取当前平台的更新信息
+        const platform = `${getPlatform()}-${getArch()}`;
+        const platformInfo = updateJson.platforms?.[platform];
+        if (!platformInfo) {
+          throw new Error(`当前平台 ${platform} 没有可用的更新`);
+        }
+
+        let installDir = "";
+        try {
+          installDir = await invoke("get_install_dir");
+        } catch (err) {
+          console.warn("无法获取安装目录:", err);
+        }
+        const installerArgs = installDir ? ['/S', `/D=${installDir}`] : undefined;
+
+        ElMessage.success(`发现新版本 v${latestVersion}，正在下载并安装...`);
+        await invoke('plugin:updater|downloadAndInstall', {
+          body: {
+            version: latestVersion,
+            date: updateJson.date,
+            body: updateJson.notes,
+            signature: platformInfo.signature,
+            downloadUrl: platformInfo.url,
+            installerArgs,
+          }
+        });
+        ElMessage.success('更新完成，即将重启...');
+        const { relaunch } = await import('@tauri-apps/plugin-process');
+        await relaunch();
+      } else {
+        ElMessage.info("已是最新版本");
+      }
+    } catch (proxyErr) {
+      ElMessage.error("检查更新失败: " + proxyErr);
+    }
   } finally {
     checkingUpdate.value = false;
   }
+}
+
+function getPlatform(): string {
+  const platform = navigator.platform.toLowerCase();
+  if (platform.includes('win')) return 'windows';
+  if (platform.includes('mac')) return 'darwin';
+  return 'linux';
+}
+
+function getArch(): string {
+  // @ts-ignore userAgentData is not in all TS lib versions
+  const uaData = navigator.userAgentData;
+  if (uaData?.platform) {
+    const arch = uaData.architecture || '';
+    if (arch.includes('arm') || arch.includes('aarch64')) return 'aarch64';
+  }
+  // Fallback: assume x86_64
+  return 'x86_64';
+}
+
+async function installUpdate(update: any) {
+  let installDir = "";
+  try {
+    installDir = await invoke("get_install_dir");
+  } catch (e) {
+    console.warn("无法获取安装目录:", e);
+  }
+  const installerArgs = installDir ? ['/S', `/D=${installDir}`] : undefined;
+
+  ElMessage.success(`发现新版本 v${update.version}，正在下载并安装...`);
+  await update.downloadAndInstall((event: any) => {
+    switch (event.event) {
+      case 'Started':
+        addLog(`开始下载更新 (大小: ${event.data.contentLength} 字节)`);
+        break;
+      case 'Progress':
+        addLog(`已下载: ${event.data.chunkLength} 字节`);
+        break;
+      case 'Finished':
+        addLog('下载完成');
+        break;
+    }
+  }, { installerArgs });
+  ElMessage.success('更新完成，即将重启...');
+  const { relaunch } = await import('@tauri-apps/plugin-process');
+  await relaunch();
 }
 
 // ============ Lifecycle ============

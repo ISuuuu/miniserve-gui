@@ -441,13 +441,21 @@ async fn download_engine(
     }
 
     let original_url = "https://api.github.com/repos/svenstaro/miniserve/releases/latest";
-    let proxy_url = format!("https://github.369900.xyz/{}", original_url);
+    let proxy_prefix = get_proxy_prefix(&app_handle).unwrap_or_default();
+    let proxy_url = if proxy_prefix.is_empty() {
+        String::new()
+    } else {
+        format!("{}{}", proxy_prefix, original_url)
+    };
 
     let response = match client.get(original_url).send().await {
         Ok(resp) if resp.status().is_success() => resp,
-        _ => {
+        _ if !proxy_url.is_empty() => {
             info!("直连失败，尝试使用代理: {}", proxy_url);
             client.get(&proxy_url).send().await.map_err(|e| format!("代理也无法访问: {}", e))?
+        }
+        _ => {
+            return Err("直连失败且未配置代理".into());
         }
     };
 
@@ -511,13 +519,20 @@ async fn download_engine(
         .ok_or("No matching binary found")?;
 
     let download_url = &asset.browser_download_url;
-    let proxy_download_url = format!("https://github.369900.xyz/{}", download_url);
+    let proxy_download_url = if proxy_prefix.is_empty() {
+        String::new()
+    } else {
+        format!("{}{}", proxy_prefix, download_url)
+    };
 
     let mut response = match client.get(download_url).send().await {
         Ok(resp) if resp.status().is_success() => resp,
-        _ => {
+        _ if !proxy_download_url.is_empty() => {
             info!("直连下载失败，尝试使用代理: {}", proxy_download_url);
             client.get(&proxy_download_url).send().await.map_err(|e| format!("代理下载失败: {}", e))?
+        }
+        _ => {
+            return Err("直连下载失败且未配置代理".into());
         }
     };
 
@@ -849,6 +864,39 @@ fn get_install_dir() -> Result<String, String> {
     Ok(dir)
 }
 
+#[derive(Serialize)]
+struct UpdaterConfig {
+    endpoints: Vec<String>,
+    proxy: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+struct UpdaterPluginConfig {
+    endpoints: Vec<String>,
+    #[serde(default)]
+    proxy: Option<String>,
+}
+
+fn get_proxy_prefix(app_handle: &AppHandle) -> Option<String> {
+    let plugins = &app_handle.config().plugins.0;
+    let updater_value = plugins.get("updater")?;
+    let config: UpdaterPluginConfig = serde_json::from_value(updater_value.clone()).ok()?;
+    config.proxy
+}
+
+#[tauri::command]
+fn get_updater_config(app_handle: AppHandle) -> Result<UpdaterConfig, String> {
+    let plugins = &app_handle.config().plugins.0;
+    let updater_value = plugins.get("updater").ok_or("updater config not found")?;
+    let config: UpdaterPluginConfig = serde_json::from_value(updater_value.clone())
+        .map_err(|e| format!("failed to parse updater config: {}", e))?;
+
+    Ok(UpdaterConfig {
+        endpoints: config.endpoints,
+        proxy: config.proxy,
+    })
+}
+
 // ============ App Entry ============
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -948,6 +996,7 @@ pub fn run() {
             get_server_status,
             generate_qr,
             get_install_dir,
+            get_updater_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
