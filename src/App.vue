@@ -58,6 +58,7 @@ const qrCodeUrl = ref("");
 const qrCodes = ref<string[]>([]);
 const serverUrls = ref<string[]>([]);
 const logs = ref<string[]>([]);
+const logBoxRef = ref<HTMLElement | null>(null);
 const copySuccess = ref(false);
 const hoveredIdx = ref<number | null>(null);
 
@@ -275,6 +276,14 @@ async function selectPath() {
 function addLog(msg: string) {
   logs.value.push(msg);
   if (logs.value.length > 200) logs.value.shift();
+  setTimeout(() => {
+    if (logBoxRef.value) {
+      const lastLog = logBoxRef.value.querySelector('.log-line:last-child');
+      if (lastLog) {
+        lastLog.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  }, 50);
 }
 
 // ============ Auto Save ============
@@ -632,7 +641,7 @@ onMounted(async () => {
               <el-button text size="small" @click="logs = []">清空</el-button>
             </div>
           </template>
-          <div class="log-box">
+          <div ref="logBoxRef" class="log-box">
             <p v-for="(log, i) in logs" :key="i" class="log-line">{{ log }}</p>
             <p v-if="logs.length === 0" class="log-empty">暂无日志</p>
           </div>
@@ -641,6 +650,15 @@ onMounted(async () => {
     </div>
   </div>
 </template>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  height: 100%;
+}
+</style>
 
 <style scoped>
 .app-container {
