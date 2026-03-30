@@ -374,6 +374,9 @@ fn build_miniserve_args(cfg: &ServerConfig) -> Result<Vec<String>, String> {
         args.push("-z".into());
     }
 
+    // Verbose mode to show all details in logs
+    args.push("-v".into());
+
     Ok(args)
 }
 
@@ -646,7 +649,8 @@ async fn start_server(
     // For capturing random route from stdout
     let (tx_route, rx_route) = std::sync::mpsc::channel();
 
-    // Log stdout in background and capture random route
+    // Log stdout in background and capture random route, emit to frontend
+    let app_handle_clone = app_handle.clone();
     let engine_path_for_log = engine_path.clone();
     let args_for_log = args.clone();
     let capture_route = config.random_route;
@@ -655,7 +659,8 @@ async fn start_server(
         if let Some(stdout) = stdout {
             for line in stdout.lines().map_while(Result::ok) {
                 let trimmed = line.trim();
-                log::info!("[miniserve stdout] {}", trimmed);
+                log::info!("{}", trimmed);
+                let _ = app_handle_clone.emit("server-log", trimmed);
                 // Try to capture random route from output like:
                 // "http://192.168.6.133:8080/857613"
                 if capture_route {
@@ -674,11 +679,13 @@ async fn start_server(
         }
     });
 
-    // Log stderr in background
+    // Log stderr in background, emit to frontend
+    let app_handle_clone2 = app_handle.clone();
     std::thread::spawn(move || {
         if let Some(stderr) = stderr {
             for line in stderr.lines().map_while(Result::ok) {
-                log::warn!("[miniserve stderr] {}", line);
+                log::warn!("{}", line);
+                let _ = app_handle_clone2.emit("server-log", line.trim());
             }
         }
     });

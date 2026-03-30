@@ -273,8 +273,7 @@ async function selectPath() {
 // ============ Logs ============
 
 function addLog(msg: string) {
-  const ts = new Date().toLocaleTimeString();
-  logs.value.push(`[${ts}] ${msg}`);
+  logs.value.push(msg);
   if (logs.value.length > 200) logs.value.shift();
 }
 
@@ -357,6 +356,10 @@ onMounted(async () => {
 
   await listen("server-started", (event) => {
     addLog("Server event: " + JSON.stringify(event.payload));
+  });
+
+  await listen<string>("server-log", (event) => {
+    addLog(event.payload);
   });
 });
 </script>
