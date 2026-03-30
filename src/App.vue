@@ -349,9 +349,9 @@ async function checkForUpdates() {
       }
       const updateJson = await resp.json();
 
-      // 检查版本
-      const currentVersion = appVersion.value;
-      const latestVersion = updateJson.version;
+      // 检查版本（统一去掉 v 前缀比较）
+      const currentVersion = appVersion.value.replace(/^v/, '');
+      const latestVersion = (updateJson.version || '').replace(/^v/, '');
       if (latestVersion && latestVersion !== currentVersion) {
         addLog(`发现新版本 v${latestVersion} (当前: v${currentVersion})`);
 
@@ -362,24 +362,11 @@ async function checkForUpdates() {
           throw new Error(`当前平台 ${platform} 没有可用的更新`);
         }
 
-        let installDir = "";
-        try {
-          installDir = await invoke("get_install_dir");
-        } catch (err) {
-          console.warn("无法获取安装目录:", err);
-        }
-        const installerArgs = installDir ? ['/S', `/D=${installDir}`] : undefined;
-
         ElMessage.success(`发现新版本 v${latestVersion}，正在下载并安装...`);
-        await invoke('plugin:updater|downloadAndInstall', {
-          body: {
-            version: latestVersion,
-            date: updateJson.date,
-            body: updateJson.notes,
-            signature: platformInfo.signature,
-            downloadUrl: platformInfo.url,
-            installerArgs,
-          }
+        await invoke('download_and_install_update', {
+          url: platformInfo.url,
+          signature: platformInfo.signature,
+          version: latestVersion,
         });
         ElMessage.success('更新完成，即将重启...');
         const { relaunch } = await import('@tauri-apps/plugin-process');

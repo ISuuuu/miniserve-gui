@@ -11,8 +11,7 @@
     "fs:default",
     "dialog:default",
     "clipboard-manager:default",
-    "updater:allow-check",
-    "updater:allow-download-and-install",
+    "updater:default",
     "process:allow-restart"
   ]
 }

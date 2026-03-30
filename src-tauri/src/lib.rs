@@ -897,6 +897,67 @@ fn get_updater_config(app_handle: AppHandle) -> Result<UpdaterConfig, String> {
     })
 }
 
+#[tauri::command]
+async fn download_and_install_update(
+    app_handle: AppHandle,
+    url: String,
+    _signature: String,
+    version: String,
+) -> Result<(), String> {
+    info!("开始下载更新 v{}: {}", version, url);
+    let client = reqwest::Client::builder()
+        .user_agent("miniserve-gui-updater")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let proxy_prefix = get_proxy_prefix(&app_handle).unwrap_or_default();
+    let download_url = if !proxy_prefix.is_empty() && url.contains("github.com") {
+        format!("{}{}", proxy_prefix, url)
+    } else {
+        url.clone()
+    };
+
+    info!("下载更新: {}", download_url);
+
+    let response = client
+        .get(&download_url)
+        .send()
+        .await
+        .map_err(|e| format!("下载失败: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("下载失败: HTTP {}", response.status()));
+    }
+
+    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+
+    let temp_dir = std::env::temp_dir();
+    let file_name = url.split('/').last().unwrap_or("update.exe");
+    let temp_path = temp_dir.join(file_name);
+
+    fs::write(&temp_path, &bytes).map_err(|e| e.to_string())?;
+    info!("更新已下载到: {:?}", temp_path);
+
+    #[cfg(windows)]
+    {
+        use std::process::Command;
+        let install_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()));
+
+        let mut cmd = Command::new(&temp_path);
+        cmd.arg("/S");
+        if let Some(dir) = install_dir {
+            cmd.arg(format!("/D={}", dir.display()));
+        }
+
+        let status = cmd.spawn().map_err(|e| format!("启动安装程序失败: {}", e))?;
+        info!("安装程序已启动: {:?}", status);
+    }
+
+    Ok(())
+}
+
 // ============ App Entry ============
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -997,6 +1058,7 @@ pub fn run() {
             generate_qr,
             get_install_dir,
             get_updater_config,
+            download_and_install_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
