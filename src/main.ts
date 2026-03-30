@@ -4,6 +4,9 @@ import "element-plus/dist/index.css";
 import * as ElementPlusIconsVue from "@element-plus/icons-vue";
 import App from "./App.vue";
 
+// 禁用右键菜单（客户端不需要浏览器右键菜单）
+document.addEventListener('contextmenu', (e) => e.preventDefault());
+
 const app = createApp(App);
 app.use(ElementPlus);
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
