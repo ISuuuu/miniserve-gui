@@ -3,7 +3,7 @@ import { ref, reactive, onMounted, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ElMessage } from "element-plus";
-import { FolderOpened, Download, VideoPlay, VideoPause, Refresh, DocumentCopy, InfoFilled } from "@element-plus/icons-vue";
+import { FolderOpened, Download, VideoPlay, VideoPause, Refresh, DocumentCopy, InfoFilled, Setting, Lock, Picture, MagicStick, Files, Cpu } from "@element-plus/icons-vue";
 import { getVersion } from "@tauri-apps/api/app";
 
 // ============ Types ============
@@ -458,7 +458,7 @@ onMounted(async () => {
       <!-- Config Panel -->
       <aside class="config-panel">
         <el-form label-width="90" size="small">
-          <div class="section-title">📂 基础配置</div>
+          <div class="section-title"><el-icon><Setting /></el-icon> 基础配置</div>
           <el-form-item label="分享路径">
             <div class="path-row">
               <el-input v-model="config.path" placeholder="选择或输入文件夹路径" readonly />
@@ -481,7 +481,7 @@ onMounted(async () => {
             </el-select>
           </el-form-item>
 
-          <div class="section-title">🔐 安全控制</div>
+          <div class="section-title"><el-icon><Lock /></el-icon> 安全控制</div>
           <el-form-item label="用户名">
             <el-input v-model="config.auth_username" placeholder="留空则不验证" />
           </el-form-item>
@@ -504,7 +504,7 @@ onMounted(async () => {
             <el-switch v-model="config.media_controls" /> &nbsp; 允许媒体操作
           </el-form-item> -->
 
-          <div class="section-title">🎨 界面展示</div>
+          <div class="section-title"><el-icon><Picture /></el-icon> 界面展示</div>
           <el-form-item label="配色方案">
             <el-select v-model="config.color_scheme" placeholder="选择配色方案">
               <el-option
@@ -535,7 +535,7 @@ onMounted(async () => {
             </el-select>
           </el-form-item> -->
 
-          <div class="section-title">⚙️ 高级进阶</div>
+          <div class="section-title"><el-icon><MagicStick /></el-icon> 高级进阶</div>
           <div class="two-col">
             <el-form-item>
               <div class="switch-row">
@@ -580,7 +580,7 @@ onMounted(async () => {
         <el-card v-if="serverStatus?.running" class="status-card" shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>🚀 服务运行中</span>
+              <span><el-icon><Cpu /></el-icon> 服务运行中</span>
               <el-tag type="success" size="small">PID {{ serverStatus.pid }}</el-tag>
             </div>
           </template>
@@ -616,7 +616,7 @@ onMounted(async () => {
 
         <el-card v-else class="status-card" shadow="hover">
           <div class="idle-state">
-            <p>⬜ 服务未运行</p>
+            <p><el-icon><Cpu /></el-icon> 服务未运行</p>
             <p class="hint">配置好参数后点击「启动服务」</p>
           </div>
         </el-card>
@@ -625,7 +625,7 @@ onMounted(async () => {
         <el-card class="log-card" shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>📋 运行日志</span>
+              <span><el-icon><Files /></el-icon> 运行日志</span>
               <el-button text size="small" @click="logs = []">清空</el-button>
             </div>
           </template>
@@ -652,20 +652,22 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 20px;
+  padding: 10px 20px;
   background: #fff;
   border-bottom: 1px solid #e4e7ed;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .app-header h2 {
   margin: 0;
   font-size: 18px;
+  color: #1E293B;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .download-progress {
@@ -680,10 +682,10 @@ onMounted(async () => {
 }
 
 .config-panel {
-  width: 320px;
+  width: 300px;
   min-width: 280px;
   background: #fff;
-  padding: 16px;
+  padding: 10px 12px;
   overflow-y: auto;
   border-right: 1px solid #e4e7ed;
 }
@@ -694,10 +696,20 @@ onMounted(async () => {
   width: 100%;
 }
 
-
-
 .path-row .el-input {
   flex: 1;
+}
+
+.path-row .el-button {
+  background: #409EFF;
+  border-color: #409EFF;
+  transition: all 0.2s ease;
+}
+
+.path-row .el-button:hover {
+  background: #337ECC;
+  border-color: #337ECC;
+  transform: translateY(-1px);
 }
 
 .panel-actions {
@@ -717,9 +729,8 @@ onMounted(async () => {
   margin-bottom: 6px;
 }
 
-/* 将无标签的表单项内容区右移，与带标签的控件对齐 */
 .two-col .el-form-item .el-form-item__content {
-  margin-left: 70px; /* 向左移动一些以更接近配色方案位置 */
+  margin-left: 70px;
   padding: 0;
 }
 
@@ -727,6 +738,8 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 8px;
+  color: #606266;
+  font-size: 13px;
 }
 
 .right-panel {
@@ -734,14 +747,20 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px;
+  padding: 12px 16px;
   overflow-y: auto;
   min-height: 0;
 }
 
 .status-card {
   flex-shrink: 0;
-  flex: 0 1 220px;
+  flex: 0 1 auto;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.status-card:hover {
+  box-shadow: 0 4px 20px rgba(64, 158, 255, 0.15);
 }
 
 .card-header {
@@ -753,15 +772,18 @@ onMounted(async () => {
 
 .url-layout {
   display: flex;
-  gap: 16px;
-  min-height: 120px;
+  gap: 12px;
+  min-height: auto;
+  align-items: flex-start;
+  justify-content: space-between;
 }
 
 .url-column {
-  flex: 0 0 55%;
+  flex: 0 0 70%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .url-item {
@@ -770,11 +792,18 @@ onMounted(async () => {
   justify-content: space-between;
   padding: 6px 10px;
   background: #f5f7fa;
+  border: 1px solid transparent;
   border-radius: 6px;
   gap: 8px;
-  font-size: 13px;
-  transition: all 0.2s;
+  font-size: 12px;
+  transition: all 0.2s ease;
   width: 100%;
+  cursor: pointer;
+}
+
+.url-item:hover {
+  background: #ecf5ff;
+  border-color: #409EFF;
 }
 
 .url-item .el-link {
@@ -785,23 +814,32 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
+.url-item .el-button {
+  transition: all 0.2s ease;
+}
+
+.url-item .el-button:hover {
+  color: #409EFF;
+}
+
 .url-item.active {
   background: #ecf5ff;
-  border: 1px solid #409eff;
+  border-color: #409EFF;
 }
 
 .qr-column {
-  width: 120px;
-  min-height: 120px;
-  flex-shrink: 0;
+  width: auto;
+  min-width: 150px;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
   background: #fafafa;
+  border: 1px solid #eee;
   border-radius: 8px;
+  align-self: center;
   position: sticky;
-  top: 16px;
-  align-self: flex-start;
+  top: 10px;
 }
 
 .qr-display {
@@ -809,8 +847,9 @@ onMounted(async () => {
 }
 
 .qr-display .qr-img {
-  width: 120px;
-  height: 120px;
+  width: 130px;
+  height: 130px;
+  border-radius: 8px;
 }
 
 .qr-hint {
@@ -822,36 +861,48 @@ onMounted(async () => {
 
 .qr-placeholder {
   color: #909399;
-  font-size: 13px;
+  font-size: 11px;
   text-align: center;
-  padding: 16px;
+  padding: 8px;
+  width: 130px;
+  height: 130px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .idle-state {
   text-align: center;
-  padding: 20px;
+  padding: 16px;
   color: #909399;
 }
 
 .idle-state .hint {
   font-size: 13px;
   margin-top: 8px;
+  color: #c0c4cc;
 }
 
 .log-card {
   flex: 1 1 350px;
   display: flex;
   flex-direction: column;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.log-card :deep(.el-card__body) {
+  padding: 0;
 }
 
 .log-box {
   background: #1e1e1e;
-  color: #d4d4d4;
+  color: #4ADE80;
   padding: 16px;
-  border-radius: 4px;
+  border-radius: 0 0 12px 12px;
   font-family: "Consolas", "Monaco", monospace;
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.8;
   overflow-y: auto;
   flex: 1;
 }
@@ -866,5 +917,31 @@ onMounted(async () => {
   color: #666;
   text-align: center;
   padding: 20px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #409EFF;
+  margin: 12px 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.section-title .el-icon {
+  font-size: 16px;
+}
+
+:deep(.el-button--success) {
+  background: #67C23A;
+  border-color: #67C23A;
+}
+
+:deep(.el-button--success:hover) {
+  background: #5DAB34;
+  border-color: #5DAB34;
 }
 </style>
