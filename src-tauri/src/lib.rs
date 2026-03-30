@@ -6,7 +6,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 
 use futures_util::StreamExt;
-use log::{info, warn};
+use log::info;
 use serde::{Deserialize, Serialize};
 use tauri::{
     AppHandle, Emitter, Manager, State,
@@ -525,7 +525,7 @@ async fn download_engine(
         format!("{}{}", proxy_prefix, download_url)
     };
 
-    let mut response = match client.get(download_url).send().await {
+    let response = match client.get(download_url).send().await {
         Ok(resp) if resp.status().is_success() => resp,
         _ if !proxy_download_url.is_empty() => {
             info!("直连下载失败，尝试使用代理: {}", proxy_download_url);
