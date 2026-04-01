@@ -969,9 +969,10 @@ async fn download_and_install_update(
         let target_path = current_exe.to_string_lossy().to_string();
         let source_path = temp_path.to_string_lossy().to_string();
 
-        // 使用 pkexec 请求 root 权限来替换二进制文件
+        // 使用 sh -c 先删除旧文件（Linux允许删除正在运行的文件），再复制新文件
+        let cmd = format!("rm -f '{}' && cp '{}' '{}'", target_path, source_path, target_path);
         let output = Command::new("pkexec")
-            .args(["/bin/cp", &source_path, &target_path])
+            .args(["sh", "-c", &cmd])
             .output();
 
         match output {
@@ -981,8 +982,7 @@ async fn download_and_install_update(
             }
             Ok(o) => {
                 let stderr = String::from_utf8_lossy(&o.stderr);
-                let stdout = String::from_utf8_lossy(&o.stdout);
-                log::error!("pkexec 失败: stderr={}, stdout={}", stderr, stdout);
+                log::error!("pkexec 失败: {}", stderr);
                 return Err(format!("更新失败: {}", stderr.trim()));
             }
             Err(e) => {
