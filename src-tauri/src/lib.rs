@@ -955,6 +955,60 @@ async fn download_and_install_update(
         info!("安装程序已启动: {:?}", status);
     }
 
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        use std::process::Command;
+
+        // 设置可执行权限
+        let mut perms = fs::metadata(&temp_path).map_err(|e| e.to_string())?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&temp_path, perms).map_err(|e| e.to_string())?;
+
+        let current_exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let target_path = current_exe.to_string_lossy().to_string();
+
+        // 使用 pkexec 请求 root 权限来替换二进制文件
+        let status = Command::new("pkexec")
+            .args(["cp", &temp_path.to_string_lossy(), &target_path])
+            .status();
+
+        match status {
+            Ok(s) if s.success() => {
+                info!("更新安装成功，重启应用");
+                // 重启应用
+                app_handle.restart();
+            }
+            _ => {
+                // pkexec 可能不存在，尝试直接替换（如果用户有权限）
+                info!("pkexec 失败，尝试直接替换");
+                fs::copy(&temp_path, &target_path).map_err(|e| format!("替换失败，可能需要管理员权限: {}", e))?;
+                info!("更新安装成功，重启应用");
+                app_handle.restart();
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+
+        let current_exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let target_path = current_exe.to_string_lossy().to_string();
+
+        // macOS: 替换并重启
+        fs::copy(&temp_path, &target_path).map_err(|e| format!("替换失败: {}", e))?;
+
+        // 设置可执行权限
+        Command::new("chmod")
+            .args(["+x", &target_path])
+            .status()
+            .ok();
+
+        info!("更新安装成功，重启应用");
+        app_handle.restart();
+    }
+
     Ok(())
 }
 
