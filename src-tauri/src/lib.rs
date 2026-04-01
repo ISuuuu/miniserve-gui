@@ -967,24 +967,26 @@ async fn download_and_install_update(
 
         let current_exe = std::env::current_exe().map_err(|e| e.to_string())?;
         let target_path = current_exe.to_string_lossy().to_string();
+        let source_path = temp_path.to_string_lossy().to_string();
 
         // 使用 pkexec 请求 root 权限来替换二进制文件
-        let status = Command::new("pkexec")
-            .args(["cp", &temp_path.to_string_lossy(), &target_path])
-            .status();
+        let output = Command::new("pkexec")
+            .args(["/bin/cp", &source_path, &target_path])
+            .output();
 
-        match status {
-            Ok(s) if s.success() => {
+        match output {
+            Ok(o) if o.status.success() => {
                 info!("更新安装成功，重启应用");
-                // 重启应用
                 app_handle.restart();
             }
-            _ => {
-                // pkexec 可能不存在，尝试直接替换（如果用户有权限）
-                info!("pkexec 失败，尝试直接替换");
-                fs::copy(&temp_path, &target_path).map_err(|e| format!("替换失败，可能需要管理员权限: {}", e))?;
-                info!("更新安装成功，重启应用");
-                app_handle.restart();
+            Ok(o) => {
+                let stderr = String::from_utf8_lossy(&o.stderr);
+                let stdout = String::from_utf8_lossy(&o.stdout);
+                log::error!("pkexec 失败: stderr={}, stdout={}", stderr, stdout);
+                return Err(format!("更新失败: {}", stderr.trim()));
+            }
+            Err(e) => {
+                return Err(format!("pkexec 执行失败: {}", e));
             }
         }
     }
