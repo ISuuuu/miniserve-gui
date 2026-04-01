@@ -39,6 +39,7 @@ log = "0.4"
 env_logger = "0.11"
 tauri-plugin-updater = "2.10.0"
 tauri-plugin-process = "2.3.1"
+tauri-plugin-single-instance = "2"
 
 [profile.release]
 strip = true       # 剔除调试信息（最有效，能砍掉 70% 体积）
