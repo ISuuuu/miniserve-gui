@@ -309,58 +309,41 @@ interface UpdaterConfig {
 }
 
 async function checkForUpdates() {
+  if (checkingUpdate.value) return;
   checkingUpdate.value = true;
+  addLog("正在检查软件更新...");
 
-  let originalUrl = "";
-  let proxyPrefix = "";
   try {
     const config = await invoke<UpdaterConfig>("get_updater_config");
-    originalUrl = config.endpoints[0] || "";
-    proxyPrefix = config.proxy || "";
-  } catch (e) {
-    ElMessage.error("获取更新配置失败: " + e);
-    checkingUpdate.value = false;
-    return;
-  }
+    const originalUrl = config.endpoints[0] || "";
+    const proxyPrefix = config.proxy || "";
+    const proxyUrl = proxyPrefix ? `${proxyPrefix}${originalUrl}` : "";
 
-  const proxyUrl = proxyPrefix ? `${proxyPrefix}${originalUrl}` : "";
-
-  try {
     const { check } = await import('@tauri-apps/plugin-updater');
-    const update = await check();
-
-    if (update) {
-      await installUpdate(update);
-    } else {
-      ElMessage.info("已是最新版本");
-    }
-  } catch (e) {
-    if (!proxyUrl) {
-      ElMessage.error("检查更新失败: " + e);
-      checkingUpdate.value = false;
-      return;
-    }
-    // 直连失败，尝试通过代理获取更新信息
-    addLog("直连失败，尝试使用代理: " + proxyUrl);
+    
+    let update = null;
     try {
+      // 尝试直连，5秒内无响应则强制超时进入代理逻辑
+      update = await Promise.race([
+        check(),
+        new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
+      ]);
+    } catch (e) {
+      if (!proxyUrl) throw e;
+      
+      addLog("直连检查超时或失败，尝试使用代理: " + proxyUrl);
       const resp = await fetch(proxyUrl);
-      if (!resp.ok) {
-        throw new Error(`代理响应异常: ${resp.status}`);
-      }
+      if (!resp.ok) throw new Error(`代理响应异常: ${resp.status}`);
       const updateJson = await resp.json();
 
-      // 检查版本（统一去掉 v 前缀比较）
       const currentVersion = appVersion.value.replace(/^v/, '');
       const latestVersion = (updateJson.version || '').replace(/^v/, '');
+      
       if (latestVersion && latestVersion !== currentVersion) {
         addLog(`发现新版本 v${latestVersion} (当前: v${currentVersion})`);
-
-        // 获取当前平台的更新信息
         const platform = `${getPlatform()}-${getArch()}`;
         const platformInfo = updateJson.platforms?.[platform];
-        if (!platformInfo) {
-          throw new Error(`当前平台 ${platform} 没有可用的更新`);
-        }
+        if (!platformInfo) throw new Error(`当前平台 ${platform} 无可用更新`);
 
         ElMessage.success(`发现新版本 v${latestVersion}，正在下载并安装...`);
         await invoke('download_and_install_update', {
@@ -368,15 +351,21 @@ async function checkForUpdates() {
           signature: platformInfo.signature,
           version: latestVersion,
         });
-        ElMessage.success('更新完成，即将重启...');
         const { relaunch } = await import('@tauri-apps/plugin-process');
         await relaunch();
-      } else {
-        ElMessage.info("已是最新版本");
+        return;
       }
-    } catch (proxyErr) {
-      ElMessage.error("检查更新失败: " + proxyErr);
+      update = null;
     }
+
+    if (update) {
+      await installUpdate(update);
+    } else {
+      ElMessage.info("已是最新版本");
+    }
+  } catch (e: any) {
+    addLog("检查更新失败: " + e);
+    ElMessage.error("检查更新失败: " + (e.message || e));
   } finally {
     checkingUpdate.value = false;
   }
