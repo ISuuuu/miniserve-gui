@@ -1,14 +1,26 @@
 # miniserve-gui
 
-跨平台的 [miniserve](https://github.com/svenstaro/miniserve) 提供图形化界面客户端。
+![Screenshot](screenshot.png)
+
+为[miniserve](https://github.com/svenstaro/miniserve) 提供图形化界面客户端。
 
 ## 功能特性
 
 - ✅ **引擎自动管理** - 自动检测/下载最新版本的 miniserve 二进制文件
-- ✅ **可视化配置** - 支持所有 miniserve CLI 参数的图形化配置
+- ✅ **可视化配置** - 支持大部分 miniserve CLI 参数的图形化配置
 - ✅ **服务控制** - 一键启动/停止服务，实时显示服务状态
 - ✅ **二维码分享** - 生成二维码，移动端扫码即访问
 - ✅ **配置持久化** - 保存配置到本地，重启后自动加载
+
+## 下载
+
+从 [Releases](https://github.com/ISuuuu/miniserve-gui/releases) 下载最新版本：
+
+| 平台 | 文件 |
+|------|------|
+| Windows | `.msi` / `.exe` |
+| macOS(未测试) | `.dmg` |
+| Linux | `.AppImage` / `.deb` |
 
 ## 支持的参数
 
