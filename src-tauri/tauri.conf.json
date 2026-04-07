@@ -55,7 +55,10 @@
           "libayatana-appindicator3-1",
           "librsvg2-common"
         ]
-      }
+      },
+       "appimage": {
+          "bundleMediaFramework": false
+        }
     }
   },
   "plugins": {
