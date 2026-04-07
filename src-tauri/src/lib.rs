@@ -904,6 +904,15 @@ async fn download_and_install_update(
     _signature: String,
     version: String,
 ) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    {
+        // 如果当前不是 AppImage 环境，说明是通过 deb 或其他方式安装的
+        // 直接返回错误，让前端引导用户去 Release 页面下载
+        if std::env::var("APPIMAGE").is_err() {
+            return Err("由于您使用的是非便携版本，请前往 Github Release 页面下载最新的安装包进行更新。".into());
+        }
+    }
+
     info!("开始下载更新 v{}: {}", version, url);
     let client = reqwest::Client::builder()
         .user_agent("miniserve-gui-updater")
@@ -960,20 +969,34 @@ async fn download_and_install_update(
         use std::os::unix::fs::PermissionsExt;
         use std::process::Command;
 
-        // 设置可执行权限
-        let mut perms = fs::metadata(&temp_path).map_err(|e| e.to_string())?.permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&temp_path, perms).map_err(|e| e.to_string())?;
-
-        let current_exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        let target_path = current_exe.to_string_lossy().to_string();
         let source_path = temp_path.to_string_lossy().to_string();
 
-        // 使用 sh -c 先删除旧文件（Linux允许删除正在运行的文件），再复制新文件
-        let cmd = format!("rm -f '{}' && cp '{}' '{}'", target_path, source_path, target_path);
-        let output = Command::new("pkexec")
-            .args(["sh", "-c", &cmd])
-            .output();
+        let output = if source_path.ends_with(".deb") {
+            info!("检测到 deb 文件，使用 dpkg 安装...");
+            let cmd = format!("dpkg -i '{}'", source_path);
+            Command::new("pkexec")
+                .args(["sh", "-c", &cmd])
+                .output()
+        } else {
+            info!("执行 AppImage/二进制文件 替换...");
+            // 设置可执行权限
+            let mut perms = fs::metadata(&temp_path).map_err(|e| e.to_string())?.permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&temp_path, perms).map_err(|e| e.to_string())?;
+
+            // 获取真实目标路径：如果是 AppImage 运行，必须通过环境变量获取真正的外部文件路径
+            let target_path = if let Ok(appimage_path) = std::env::var("APPIMAGE") {
+                appimage_path
+            } else {
+                std::env::current_exe().map_err(|e| e.to_string())?.to_string_lossy().to_string()
+            };
+
+            // 替换文件
+            let cmd = format!("rm -f '{}' && cp '{}' '{}'", target_path, source_path, target_path);
+            Command::new("pkexec")
+                .args(["sh", "-c", &cmd])
+                .output()
+        };
 
         match output {
             Ok(o) if o.status.success() => {
@@ -1029,11 +1052,21 @@ fn get_package_type() -> String {
     #[cfg(target_os = "windows")]
     {
         use std::process::Command;
+        #[cfg(windows)]
+        use std::os::windows::process::CommandExt;
+
         // 通过查询注册表判断是否安装了此程序 (使用 tauri.conf.json 中的 identifier)
         let is_installed = |root: &str| {
-            Command::new("reg")
-                .args(["query", &format!("{}\\{}", root, "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\com.kim.miniserve-gui")])
-                .output()
+            let mut cmd = Command::new("reg");
+            cmd.args(["query", &format!("{}\\{}", root, "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\com.kim.miniserve-gui")]);
+            
+            #[cfg(windows)]
+            {
+                const CREATE_NO_WINDOW: u32 = 0x08000000;
+                cmd.creation_flags(CREATE_NO_WINDOW);
+            }
+
+            cmd.output()
                 .map(|o| o.status.success())
                 .unwrap_or(false)
         };
