@@ -112,8 +112,11 @@ jobs:
           CARGO_PROFILE_RELEASE_LTO: "true"
           CARGO_PROFILE_RELEASE_OPT_LEVEL: "z"
           CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "1"
-          # 强制 Linux AppImage 打包时忽略几十兆的多媒体和冗余 WebKit 库
+          # 强制 Linux AppImage 瘦身：排除多媒体框架和冗余的 WebKit 库
           APPIMAGE_BUNDLE_GSTREAMER: "0"
+          DEPLOY_GSTREAMER: "0"
+          # 排除大户：ICU 数据和 WebKit 本身（假设用户系统已装 webkit2gtk-4.1）
+          EXCLUDE_LIBS: "libxml2.so.2;libicuuc.so.*;libicudata.so.*;libicui18n.so.*;libwebkit2gtk-4.1.so.0;libjavascriptcoregtk-4.1.so.0"
         with:
           uploadUpdaterJson: true
           updaterJsonPreferNsis: true
