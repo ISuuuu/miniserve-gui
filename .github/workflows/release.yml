@@ -117,6 +117,18 @@ jobs:
           prerelease: false
           generateReleaseNotes: true
 
+      - name: Upload Windows Portable
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.version || github.ref_name }}
+        run: |
+          echo "Uploading Windows Portable version..."
+          PORTABLE_NAME="miniserve-gui_${TAG}_portable_x64.exe"
+          cp "src-tauri/target/release/miniserve-gui.exe" "$PORTABLE_NAME"
+          gh release upload "$TAG" "$PORTABLE_NAME" --clobber
+
       - name: Upload Signatures Manually (Fallback)
         shell: bash
         env:
