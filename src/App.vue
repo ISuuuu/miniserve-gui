@@ -2,7 +2,7 @@
 import { ref, reactive, onMounted, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { FolderOpened, Download, VideoPlay, VideoPause, Refresh, DocumentCopy, InfoFilled, Setting, Lock, Picture, MagicStick, Files, Cpu } from "@element-plus/icons-vue";
 import { getVersion } from "@tauri-apps/api/app";
 
@@ -359,6 +359,23 @@ async function checkForUpdates() {
     }
 
     if (update) {
+      const packageType = await invoke<string>("get_package_type");
+      if (packageType === "deb" || packageType === "portable") {
+        addLog(`发现新版本 v${update.version}，当前包类型 [${packageType}] 不支持自动更新，引导至 Release 页面`);
+        ElMessageBox.confirm(
+          `发现新版本 v${update.version}，当前 [${packageType === 'deb' ? 'DEB安装版' : 'Windows便携版'}] 不支持自动更新。是否前往下载页面手动更新？`,
+          '发现更新',
+          {
+            confirmButtonText: '前往下载',
+            cancelButtonText: '稍后再说',
+            type: 'info'
+          }
+        ).then(() => {
+          const releaseUrl = "https://github.com/ISuuuu/miniserve-gui/releases/latest";
+          invoke("plugin:opener|open", { path: releaseUrl });
+        }).catch(() => {});
+        return;
+      }
       await installUpdate(update);
     } else {
       ElMessage.info("已是最新版本");

@@ -1014,6 +1014,38 @@ async fn download_and_install_update(
     Ok(())
 }
 
+#[tauri::command]
+fn get_package_type() -> String {
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::var("APPIMAGE").is_ok() {
+            return "appimage".to_string();
+        }
+        // Linux 下如果不是 AppImage，默认视为 deb/已安装版本
+        return "deb".to_string();
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        // 通过查询注册表判断是否安装了此程序 (使用 tauri.conf.json 中的 identifier)
+        let is_installed = |root: &str| {
+            Command::new("reg")
+                .args(["query", &format!("{}\\{}", root, "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\com.kim.miniserve-gui")])
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false)
+        };
+
+        if is_installed("HKCU") || is_installed("HKLM") {
+            return "installer".to_string();
+        }
+        return "portable".to_string();
+    }
+
+    "unknown".to_string()
+}
+
 // ============ App Entry ============
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1122,6 +1154,7 @@ pub fn run() {
             get_install_dir,
             get_updater_config,
             download_and_install_update,
+            get_package_type,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
