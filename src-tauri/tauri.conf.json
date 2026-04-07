@@ -56,9 +56,9 @@
           "librsvg2-common"
         ]
       },
-       "appimage": {
-          "bundleMediaFramework": false
-        }
+      "appimage": {
+        "bundleMediaFramework": false
+      }
     }
   },
   "plugins": {
