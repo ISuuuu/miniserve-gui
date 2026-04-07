@@ -372,7 +372,7 @@ async function checkForUpdates() {
           }
         ).then(() => {
           const releaseUrl = "https://github.com/ISuuuu/miniserve-gui/releases/latest";
-          invoke("plugin:opener|open", { path: releaseUrl });
+          openUrl(releaseUrl);
         }).catch(() => {});
         return;
       }
