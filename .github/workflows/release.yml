@@ -112,6 +112,8 @@ jobs:
           CARGO_PROFILE_RELEASE_LTO: "true"
           CARGO_PROFILE_RELEASE_OPT_LEVEL: "z"
           CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "1"
+          # 强制 Linux AppImage 打包时忽略几十兆的多媒体和冗余 WebKit 库
+          APPIMAGE_BUNDLE_GSTREAMER: "0"
         with:
           uploadUpdaterJson: true
           updaterJsonPreferNsis: true
