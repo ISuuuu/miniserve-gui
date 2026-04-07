@@ -1011,6 +1011,7 @@ async fn download_and_install_update(
         app_handle.restart();
     }
 
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     Ok(())
 }
 
@@ -1043,6 +1044,7 @@ fn get_package_type() -> String {
         return "portable".to_string();
     }
 
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     "unknown".to_string()
 }
 
