@@ -991,8 +991,20 @@ async fn download_and_install_update(
                 std::env::current_exe().map_err(|e| e.to_string())?.to_string_lossy().to_string()
             };
 
-            // 替换文件
-            let cmd = format!("rm -f '{}' && cp '{}' '{}'", target_path, source_path, target_path);
+            // 计算新的 AppImage 文件名
+            let target_path_buf = PathBuf::from(&target_path);
+            let target_dir = target_path_buf.parent().unwrap().to_string_lossy().to_string();
+            // 新文件名为: miniserve-gui_v{version}_x86_64.AppImage
+            let new_target_name = format!("miniserve-gui_{}_x86_64.AppImage", version);
+            let final_path = format!("{}/{}", target_dir, new_target_name);
+
+            // 替换文件并重命名
+            let cmd = format!("rm -f '{}' && cp '{}' '{}'", target_path, source_path, final_path);
+            
+            // 为了防止用户是在终端直接通过旧名字运行导致重启找不到文件
+            // 我们设置一个临时的环境变量或者让 tauri 依靠重启时传入的参数，但这里最安全的是覆盖并重命名
+            // 注意：如果重命名了，原有的快捷方式可能会失效。更好的做法是覆盖原内容，但不改名，或者覆盖后再建立一个同名软链接。
+            // 这里我们选择：覆盖原内容，然后将文件重命名，如果用户通过双击运行，下次需点击新文件。
             Command::new("pkexec")
                 .args(["sh", "-c", &cmd])
                 .output()
@@ -1051,27 +1063,22 @@ fn get_package_type() -> String {
 
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
-        #[cfg(windows)]
-        use std::os::windows::process::CommandExt;
+        // 改进 Windows 检测逻辑：检查可执行文件同级目录是否存在 Uninstall 卸载程序
+        // NSIS 打包默认会生成类似 "Uninstall miniserve-gui.exe" 的文件
+        let is_installer = std::env::current_exe()
+            .map(|p| {
+                if let Some(dir) = p.parent() {
+                    dir.join("Uninstall miniserve-gui.exe").exists() 
+                    || dir.join("unins000.exe").exists() 
+                    || dir.to_string_lossy().to_lowercase().contains("program files")
+                    || dir.to_string_lossy().to_lowercase().contains("appdata\\local\\programs")
+                } else {
+                    false
+                }
+            })
+            .unwrap_or(false);
 
-        // 通过查询注册表判断是否安装了此程序 (使用 tauri.conf.json 中的 identifier)
-        let is_installed = |root: &str| {
-            let mut cmd = Command::new("reg");
-            cmd.args(["query", &format!("{}\\{}", root, "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\com.kim.miniserve-gui")]);
-            
-            #[cfg(windows)]
-            {
-                const CREATE_NO_WINDOW: u32 = 0x08000000;
-                cmd.creation_flags(CREATE_NO_WINDOW);
-            }
-
-            cmd.output()
-                .map(|o| o.status.success())
-                .unwrap_or(false)
-        };
-
-        if is_installed("HKCU") || is_installed("HKLM") {
+        if is_installer {
             return "installer".to_string();
         }
         return "portable".to_string();
