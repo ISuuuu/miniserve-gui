@@ -59,7 +59,7 @@ const qrCodes = ref<string[]>([]);
 const serverUrls = ref<string[]>([]);
 const logs = ref<string[]>([]);
 const logBoxRef = ref<HTMLElement | null>(null);
-const copySuccess = ref(false);
+const copySuccessIdx = ref<Set<number>>(new Set());
 const hoveredIdx = ref<number | null>(null);
 
 const appVersion = ref("");
@@ -232,13 +232,19 @@ async function generateQr(url: string): Promise<string> {
   }
 }
 
-async function copyUrl(url?: string) {
+async function copyUrl(url?: string, idx?: number) {
   const urlToCopy = url || serverStatus.value?.url || "";
   if (!urlToCopy) return;
   try {
     await navigator.clipboard.writeText(urlToCopy);
-    copySuccess.value = true;
-    setTimeout(() => (copySuccess.value = false), 2000);
+    if (idx !== undefined) {
+      copySuccessIdx.value = new Set([...copySuccessIdx.value, idx]);
+      setTimeout(() => {
+        const next = new Set(copySuccessIdx.value);
+        next.delete(idx);
+        copySuccessIdx.value = next;
+      }, 2000);
+    }
     ElMessage.success("链接已复制");
   } catch {
     ElMessage.error("复制失败");
@@ -697,9 +703,9 @@ onMounted(async () => {
                 <el-link type="primary" :href="url" @click.prevent="openUrl(url)">
                   {{ url }}
                 </el-link>
-                <el-button type="primary" size="small" text @click="copyUrl(url)">
+                <el-button type="primary" size="small" text @click="copyUrl(url, idx)">
                   <el-icon><DocumentCopy /></el-icon>
-                  {{ copySuccess ? "已复制" : "复制" }}
+                  {{ copySuccessIdx.has(idx) ? "已复制" : "复制" }}
                 </el-button>
               </div>
             </div>
