@@ -153,6 +153,8 @@ pub struct ServerConfig {
     pub readme: bool,
     #[serde(default)]
     pub download: bool,
+    #[serde(default)]
+    pub webdav: bool,
 }
 
 impl Default for ServerConfig {
@@ -176,6 +178,7 @@ impl Default for ServerConfig {
             random_route: false,
             readme: false,
             download: false,
+            webdav: false,
         }
     }
 }
@@ -372,6 +375,9 @@ fn build_miniserve_args(cfg: &ServerConfig) -> Result<Vec<String>, String> {
     }
     if cfg.download {
         args.push("-z".into());
+    }
+    if cfg.webdav {
+        args.push("--enable-webdav".into());
     }
 
     // Verbose mode to show all details in logs
