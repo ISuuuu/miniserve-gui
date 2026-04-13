@@ -601,10 +601,25 @@ onMounted(async () => {
             />
           </el-form-item>
 
-          <el-form-item>
-            <el-switch v-model="config.upload" /> &nbsp; 上传文件
-            <el-switch v-model="config.mkdir" v-if="config.upload" style="margin-left: 16px" /> &nbsp; <span v-if="config.upload">创建目录</span>
-          </el-form-item>
+          <div class="toggle-row">
+            <button
+              type="button"
+              class="toggle-pill"
+              :class="{ active: config.upload }"
+              @click="config.upload = !config.upload"
+            >
+              <span class="toggle-dot" />上传文件
+            </button>
+            <button
+              type="button"
+              class="toggle-pill"
+              :class="{ active: config.mkdir }"
+              v-if="config.upload"
+              @click="config.mkdir = !config.mkdir"
+            >
+              <span class="toggle-dot" />创建目录
+            </button>
+          </div>
 
           <!-- <el-form-item v-if="config.upload">
             <el-switch v-model="config.media_controls" /> &nbsp; 允许媒体操作
@@ -643,33 +658,41 @@ onMounted(async () => {
 
           <div class="section-title"><el-icon><MagicStick /></el-icon> 高级进阶</div>
           <div class="two-col">
-            <el-form-item>
-              <div class="switch-row">
-                <el-switch v-model="config.hidden" />
-                <span>显示隐藏文件</span>
-              </div>
-            </el-form-item>
+            <button
+              type="button"
+              class="toggle-pill"
+              :class="{ active: config.hidden }"
+              @click="config.hidden = !config.hidden"
+            >
+              <span class="toggle-dot" />显示点文件
+            </button>
 
-            <el-form-item>
-              <div class="switch-row">
-                <el-switch v-model="config.random_route" />
-                <span>随机路径</span>
-              </div>
-            </el-form-item>
+            <button
+              type="button"
+              class="toggle-pill"
+              :class="{ active: config.random_route }"
+              @click="config.random_route = !config.random_route"
+            >
+              <span class="toggle-dot" />随机路径
+            </button>
 
-            <el-form-item>
-              <div class="switch-row">
-                <el-switch v-model="config.readme" />
-                <span>README渲染</span>
-              </div>
-            </el-form-item>
+            <button
+              type="button"
+              class="toggle-pill"
+              :class="{ active: config.readme }"
+              @click="config.readme = !config.readme"
+            >
+              <span class="toggle-dot" />README
+            </button>
 
-            <el-form-item>
-              <div class="switch-row">
-                <el-switch v-model="config.download" />
-                <span>一键打包下载</span>
-              </div>
-            </el-form-item>
+            <button
+              type="button"
+              class="toggle-pill"
+              :class="{ active: config.download }"
+              @click="config.download = !config.download"
+            >
+              <span class="toggle-dot" />打包下载
+            </button>
           </div>
 
           <!-- <el-form-item>
@@ -700,7 +723,7 @@ onMounted(async () => {
                 @mouseenter="hoveredIdx = idx"
                 @mouseleave="hoveredIdx = null"
               >
-                <el-link type="primary" :href="url" @click.prevent="openUrl(url)">
+                <el-link type="primary" :href="url" :underline="false" @click.prevent="openUrl(url)">
                   {{ url }}
                 </el-link>
                 <el-button type="primary" size="small" text @click="copyUrl(url, idx)">
@@ -714,7 +737,16 @@ onMounted(async () => {
                 <img :src="qrCodes[hoveredIdx]" alt="QR" class="qr-img" />
               </div>
               <div v-else class="qr-placeholder">
-                鼠标悬停地址查看二维码
+                <svg class="qr-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="3" height="3" />
+                  <rect x="18" y="14" width="3" height="3" />
+                  <rect x="14" y="18" width="3" height="3" />
+                  <rect x="18" y="18" width="3" height="3" />
+                </svg>
+                <span>鼠标悬停地址查看二维码</span>
               </div>
             </div>
           </div>
@@ -827,17 +859,71 @@ html, body {
   transform: translateY(-1px);
 }
 
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 4px 0 8px;
+  padding-left: 80px;
+}
+
+.toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: none;
+  background: #F4F4F5;
+  color: #3F3F46;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  white-space: nowrap;
+  outline: none;
+}
+
+.toggle-pill:hover {
+  background: #E4E4E7;
+}
+
+.toggle-pill.active {
+  background: #F4F4F5;
+  color: #3F3F46;
+}
+
+.toggle-pill.active:hover {
+  background: #E4E4E7;
+}
+
+.toggle-pill.active .toggle-dot {
+  background: #409EFF;
+}
+
+.toggle-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #A1A1AA;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.two-col {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 8px;
+  padding-left: 80px;
+}
+
 .panel-actions {
   display: flex;
   gap: 8px;
   margin-top: 20px;
   flex-wrap: wrap;
-}
-
-.two-col {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 .two-col .el-form-item {
@@ -918,7 +1004,6 @@ html, body {
 
 .url-item:hover {
   background: #ecf5ff;
-  border-color: #409EFF;
 }
 
 .url-item .el-link {
@@ -927,6 +1012,10 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.url-item .el-link:hover {
+  text-decoration: none;
 }
 
 .url-item .el-button {
@@ -939,7 +1028,6 @@ html, body {
 
 .url-item.active {
   background: #ecf5ff;
-  border-color: #409EFF;
 }
 
 .qr-column {
@@ -982,8 +1070,17 @@ html, body {
   width: 130px;
   height: 130px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 8px;
+}
+
+.qr-icon {
+  width: 48px;
+  height: 48px;
+  opacity: 0.15;
+  color: #303133;
 }
 
 .idle-state {
@@ -1048,6 +1145,39 @@ html, body {
 
 .section-title .el-icon {
   font-size: 16px;
+}
+
+/* 数字输入框内部垂直居中对齐 */
+:deep(.el-input-number .el-input__inner) {
+  line-height: normal;
+}
+
+/* Webkit 自定义滚动条 - Mac 风格细长圆润 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #dcdfe6;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #c0c4cc;
+}
+
+/* 深色日志区域滚动条 */
+.log-container::-webkit-scrollbar-thumb {
+  background: #4c4d4f;
+}
+
+.log-container::-webkit-scrollbar-thumb:hover {
+  background: #6c6d6f;
 }
 
 :deep(.el-button--success) {
