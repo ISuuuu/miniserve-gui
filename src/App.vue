@@ -33,6 +33,7 @@ interface ServerConfig {
   random_route: boolean;
   readme: boolean;
   download: boolean;
+  webdav: boolean;
 }
 
 interface ServerStatus {
@@ -85,6 +86,7 @@ const config = reactive<ServerConfig>({
   random_route: false,
   readme: false,
   download: false,
+  webdav: false,
 });
 
 const colorSchemes = [
@@ -293,6 +295,11 @@ function addLog(msg: string) {
 }
 
 // ============ Auto Save ============
+
+// 上传文件关闭时，自动取消创建目录
+watch(() => config.upload, (val) => {
+  if (!val) config.mkdir = false;
+});
 
 // 自动保存配置（防抖）
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -661,19 +668,28 @@ onMounted(async () => {
             <button
               type="button"
               class="toggle-pill"
-              :class="{ active: config.hidden }"
-              @click="config.hidden = !config.hidden"
+              :class="{ active: config.random_route }"
+              @click="config.random_route = !config.random_route"
             >
-              <span class="toggle-dot" />显示点文件
+              <span class="toggle-dot" />随机路径
             </button>
 
             <button
               type="button"
               class="toggle-pill"
-              :class="{ active: config.random_route }"
-              @click="config.random_route = !config.random_route"
+              :class="{ active: config.webdav }"
+              @click="config.webdav = !config.webdav"
             >
-              <span class="toggle-dot" />随机路径
+              <span class="toggle-dot" />WebDAV
+            </button>
+
+            <button
+              type="button"
+              class="toggle-pill"
+              :class="{ active: config.download }"
+              @click="config.download = !config.download"
+            >
+              <span class="toggle-dot" />打包下载
             </button>
 
             <button
@@ -688,10 +704,10 @@ onMounted(async () => {
             <button
               type="button"
               class="toggle-pill"
-              :class="{ active: config.download }"
-              @click="config.download = !config.download"
+              :class="{ active: config.hidden }"
+              @click="config.hidden = !config.hidden"
             >
-              <span class="toggle-dot" />打包下载
+              <span class="toggle-dot" />显示点文件
             </button>
           </div>
 
