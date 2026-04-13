@@ -20,7 +20,7 @@
 | 平台 | 安装版 | 便携版 (Portable) |
 |------|------|------|
 | **Windows** | `.exe` (NSIS 安装包) | `_portable_x64.exe` (单文件版) |
-| **Linux** | `.deb` (安装包) | `.AppImage` (通用便携版) |
+| **Linux** | `.deb` /`.rpm` (安装包) | `.AppImage` (通用便携版) |
 | **macOS** (未测试) | `.dmg` | - | 
 
 ## 支持的参数
@@ -39,6 +39,7 @@
 | | `--random-route ` | 随机路径 |
 | | `--readme ` | 自动渲染 README |
 | | `--z ` | 一键打包下载 |
+| | `--enable-webdav` | 启用 WebDAV 支持 |
 
 ## 技术栈
 
