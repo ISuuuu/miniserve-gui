@@ -1057,8 +1057,8 @@ html, body {
 }
 
 .qr-column {
-  width: auto;
-  min-width: 150px;
+  width: 150px;
+  height: 150px;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -1072,13 +1072,18 @@ html, body {
 }
 
 .qr-display {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
 }
 
 .qr-display .qr-img {
   width: 130px;
   height: 130px;
   border-radius: 8px;
+  display: block;
 }
 
 .qr-hint {
@@ -1092,14 +1097,15 @@ html, body {
   color: #909399;
   font-size: 11px;
   text-align: center;
-  padding: 8px;
-  width: 130px;
-  height: 130px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  padding: 8px;
 }
 
 .qr-icon {
