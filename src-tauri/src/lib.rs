@@ -1094,6 +1094,26 @@ fn get_package_type() -> String {
     "unknown".to_string()
 }
 
+#[tauri::command]
+fn show_window_command(app_handle: AppHandle) -> Result<(), String> {
+    show_window(&app_handle);
+    Ok(())
+}
+
+fn show_window(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.unminimize();
+        let _ = win.show();
+        let _ = win.set_focus();
+
+        #[cfg(target_os = "windows")]
+        {
+            let _ = win.set_always_on_top(true);
+            let _ = win.set_always_on_top(false);
+        }
+    }
+}
+
 // ============ App Entry ============
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1108,10 +1128,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // 当第二个实例启动时，显示已存在的窗口
-            if let Some(win) = app.get_webview_window("main") {
-                let _ = win.show();
-                let _ = win.set_focus();
-            }
+            show_window(app);
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
@@ -1135,10 +1152,7 @@ pub fn run() {
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => {
-                        if let Some(win) = app.get_webview_window("main") {
-                            let _ = win.show();
-                            let _ = win.set_focus();
-                        }
+                        show_window(app);
                     }
                     "quit" => {
                         let state = app.state::<AppState>();
@@ -1168,10 +1182,7 @@ pub fn run() {
                     } = event
                     {
                         let app = tray.app_handle();
-                        if let Some(win) = app.get_webview_window("main") {
-                            let _ = win.show();
-                            let _ = win.set_focus();
-                        }
+                        show_window(app);
                     }
                 })
                 .build(app)?;
@@ -1203,6 +1214,7 @@ pub fn run() {
             get_updater_config,
             download_and_install_update,
             get_package_type,
+            show_window_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

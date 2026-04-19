@@ -450,6 +450,16 @@ async function installUpdate(update: any) {
 // ============ Lifecycle ============
 
 onMounted(async () => {
+  // 尽早显示窗口，解决初始白屏闪烁问题，防止后续 await 阻塞导致窗口一直隐藏
+  // 调用后端特制的 show_main_window，解决 Windows 焦点抢占问题
+  setTimeout(async () => {
+    try {
+      await invoke("show_window_command");
+    } catch (e) {
+      console.error("Failed to show window:", e);
+    }
+  }, 100);
+
   try {
     appVersion.value = await getVersion();
   } catch (e) {
