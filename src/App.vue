@@ -62,6 +62,15 @@ const logs = ref<string[]>([]);
 const logBoxRef = ref<HTMLElement | null>(null);
 const copySuccessIdx = ref<Set<number>>(new Set());
 const hoveredIdx = ref<number | null>(null);
+const hoveredFeature = ref("");
+
+const featureDescriptions: Record<string, string> = {
+  random_route: "为服务器路径添加随机后缀，防止被他人扫描访问",
+  webdav: "启用 WebDAV 协议，支持通过 WebDAV 客户端远程管理文件",
+  download: "允许访客将目录打包为 ZIP 文件下载",
+  readme: "自动识别并渲染目录中的 README 文件作为首页",
+  hidden: "显示以 . 开头的隐藏文件和文件夹",
+};
 
 const appVersion = ref("");
 const aboutVisible = ref(false);
@@ -551,11 +560,11 @@ onMounted(async () => {
     <!-- 关于软件 Dialog -->
     <el-dialog v-model="aboutVisible" title="关于" width="400px" align-center>
       <div style="text-align: center; margin-bottom: 20px;">
-        <h3 style="margin-bottom: 5px;">miniserve-gui</h3>
+        <h3 style="margin-bottom: 5px; cursor: pointer; color: #409EFF;" @click="openUrl('https://github.com/ISuuuu/miniserve-gui')">miniserve-gui</h3>
         <el-tag type="info" size="small" style="margin-bottom: 15px;">v{{ appVersion || '未知版本' }}</el-tag>
         <p style="font-size: 13px; color: #606266; line-height: 1.6;">
           一个轻量级的跨平台文件分享工具。<br/>
-          基于 Tauri 和 svenstaro/miniserve 构建。
+          基于 Tauri 和 <a href="#" @click.prevent="openUrl('https://github.com/svenstaro/miniserve')" style="color: #409EFF; text-decoration: none;">svenstaro/miniserve</a> 构建。
         </p>
       </div>
       <template #footer>
@@ -680,6 +689,8 @@ onMounted(async () => {
               class="toggle-pill"
               :class="{ active: config.random_route }"
               @click="config.random_route = !config.random_route"
+              @mouseenter="hoveredFeature = 'random_route'"
+              @mouseleave="hoveredFeature = ''"
             >
               <span class="toggle-dot" />随机路径
             </button>
@@ -689,6 +700,8 @@ onMounted(async () => {
               class="toggle-pill"
               :class="{ active: config.webdav }"
               @click="config.webdav = !config.webdav"
+              @mouseenter="hoveredFeature = 'webdav'"
+              @mouseleave="hoveredFeature = ''"
             >
               <span class="toggle-dot" />WebDAV
             </button>
@@ -698,6 +711,8 @@ onMounted(async () => {
               class="toggle-pill"
               :class="{ active: config.download }"
               @click="config.download = !config.download"
+              @mouseenter="hoveredFeature = 'download'"
+              @mouseleave="hoveredFeature = ''"
             >
               <span class="toggle-dot" />打包下载
             </button>
@@ -707,6 +722,8 @@ onMounted(async () => {
               class="toggle-pill"
               :class="{ active: config.readme }"
               @click="config.readme = !config.readme"
+              @mouseenter="hoveredFeature = 'readme'"
+              @mouseleave="hoveredFeature = ''"
             >
               <span class="toggle-dot" />README
             </button>
@@ -716,6 +733,8 @@ onMounted(async () => {
               class="toggle-pill"
               :class="{ active: config.hidden }"
               @click="config.hidden = !config.hidden"
+              @mouseenter="hoveredFeature = 'hidden'"
+              @mouseleave="hoveredFeature = ''"
             >
               <span class="toggle-dot" />显示点文件
             </button>
@@ -726,7 +745,9 @@ onMounted(async () => {
           </el-form-item> -->
         </el-form>
 
-
+        <div class="feature-hint">
+          <span>{{ hoveredFeature ? featureDescriptions[hoveredFeature] || '' : '' }}</span>
+        </div>
       </aside>
 
       <!-- Right Panel: QR + Logs -->
@@ -858,9 +879,10 @@ html, body {
   width: 300px;
   min-width: 280px;
   background: #fff;
-  padding: 10px 12px;
+  padding: 10px 12px 36px;
   overflow-y: auto;
   border-right: 1px solid #e4e7ed;
+  position: relative;
 }
 
 .path-row {
@@ -1220,5 +1242,19 @@ html, body {
 :deep(.el-button--success:hover) {
   background: #5DAB34;
   border-color: #5DAB34;
+}
+
+.feature-hint {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: #909399;
+  background: #fff;
+  border-top: 1px solid #e4e7ed;
+  line-height: 1.4;
+  z-index: 1;
 }
 </style>
