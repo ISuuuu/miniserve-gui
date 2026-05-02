@@ -43,9 +43,35 @@
 
 ## 技术栈
 
-- **前端**: Vue 3 + TypeScript + Vite + Element Plus
+- **前端**: Vue 3 + TypeScript + Vite + Element Plus + vue-i18n
 - **后端**: Tauri 2 (Rust)
 - **引擎**: [miniserve](https://github.com/svenstaro/miniserve)
+
+## 项目结构
+
+```
+├── src/                        # 前端源码
+│   ├── App.vue                # 主组件（业务逻辑）
+│   ├── main.ts                # Vue 入口
+│   ├── components/
+│   │   ├── ConfigPanel.vue    # 配置面板组件
+│   │   ├── StatusCard.vue     # 服务状态卡片
+│   │   └── LogPanel.vue       # 运行日志面板
+│   └── i18n/
+│       ├── index.ts           # i18n 配置
+│       ├── zh-CN.ts           # 中文语言包
+│       └── en.ts              # 英文语言包
+├── src-tauri/                  # Rust 后端
+│   ├── src/
+│   │   ├── lib.rs             # 模块声明、托盘、入口
+│   │   ├── main.rs            # 程序入口
+│   │   ├── commands.rs        # Tauri commands
+│   │   ├── state.rs           # 状态和类型定义
+│   │   └── utils.rs           # 辅助函数、参数构建、配置验证
+│   ├── Cargo.toml
+│   └── tauri.conf.json
+└── package.json
+```
 
 ## 开发
 
