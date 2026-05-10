@@ -106,6 +106,7 @@ export default {
     downloadStarted: 'Starting download (size: {size} bytes)',
     downloadProgress: 'Downloaded: {size} bytes',
     downloadFinished: 'Download complete',
+    progressLabel: 'Downloading update {percent}%',
     updateComplete: 'Update complete, restarting...',
     alreadyLatest: 'Already up to date',
     checkFailed: 'Failed to check updates: {error}',

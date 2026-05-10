@@ -30,6 +30,8 @@ const hoveredFeature = ref("");
 const appVersion = ref("");
 const aboutVisible = ref(false);
 const checkingUpdate = ref(false);
+const updateDownloading = ref(false);
+const updateProgress = ref(0);
 
 const config = reactive<ServerConfig>({
   path: "",
@@ -362,19 +364,34 @@ async function installUpdate(update: any) {
   const installerArgs = installDir ? ['/S', `/D=${installDir}`] : undefined;
 
   ElMessage.success(t('update.downloading', { version: update.version }));
-  await update.downloadAndInstall((event: any) => {
-    switch (event.event) {
-      case 'Started':
-        addLog(t('update.downloadStarted', { size: event.data.contentLength }));
-        break;
-      case 'Progress':
-        addLog(t('update.downloadProgress', { size: event.data.chunkLength }));
-        break;
-      case 'Finished':
-        addLog(t('update.downloadFinished'));
-        break;
-    }
-  }, { installerArgs });
+  updateDownloading.value = true;
+  updateProgress.value = 0;
+  let totalSize = 0;
+  let downloaded = 0;
+  try {
+    await update.downloadAndInstall((event: any) => {
+      switch (event.event) {
+        case 'Started':
+          totalSize = event.data.contentLength || 0;
+          downloaded = 0;
+          addLog(t('update.downloadStarted', { size: event.data.contentLength }));
+          break;
+        case 'Progress':
+          downloaded += event.data.chunkLength || 0;
+          if (totalSize > 0) {
+            updateProgress.value = Math.min(99.9, (downloaded / totalSize) * 100);
+          }
+          addLog(t('update.downloadProgress', { size: event.data.chunkLength }));
+          break;
+        case 'Finished':
+          updateProgress.value = 100;
+          addLog(t('update.downloadFinished'));
+          break;
+      }
+    }, { installerArgs });
+  } finally {
+    updateDownloading.value = false;
+  }
   ElMessage.success(t('update.updateComplete'));
   const { relaunch } = await import('@tauri-apps/plugin-process');
   await relaunch();
@@ -510,6 +527,13 @@ onMounted(async () => {
       v-if="downloading"
       :percentage="progress"
       :format="(p: number) => `${p.toFixed(1)}%`"
+      class="download-progress"
+    />
+
+    <el-progress
+      v-if="updateDownloading"
+      :percentage="updateProgress"
+      :format="(p: number) => t('update.progressLabel', { percent: p.toFixed(1) })"
       class="download-progress"
     />
 

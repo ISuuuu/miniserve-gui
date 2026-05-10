@@ -106,6 +106,7 @@ export default {
     downloadStarted: '开始下载更新 (大小: {size} 字节)',
     downloadProgress: '已下载: {size} 字节',
     downloadFinished: '下载完成',
+    progressLabel: '正在下载更新 {percent}%',
     updateComplete: '更新完成，即将重启...',
     alreadyLatest: '已是最新版本',
     checkFailed: '检查更新失败: {error}',
