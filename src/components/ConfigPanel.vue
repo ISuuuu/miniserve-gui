@@ -1,26 +1,7 @@
 <script setup lang="ts">
 import { FolderOpened, Setting, Lock, Picture, MagicStick } from "@element-plus/icons-vue";
 import { useI18n } from "vue-i18n";
-
-interface ServerConfig {
-  path: string;
-  port: number;
-  interfaces: string;
-  auth_username: string;
-  auth_password: string;
-  upload: boolean;
-  mkdir: boolean;
-  media_controls: boolean;
-  color_scheme: string;
-  title: string;
-  compress: string;
-  hidden: boolean;
-  thumbnails: boolean;
-  random_route: boolean;
-  readme: boolean;
-  download: boolean;
-  webdav: boolean;
-}
+import type { ServerConfig } from "../types";
 
 defineProps<{
   config: ServerConfig;

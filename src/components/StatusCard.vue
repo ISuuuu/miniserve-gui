@@ -1,14 +1,7 @@
 <script setup lang="ts">
 import { DocumentCopy, Cpu } from "@element-plus/icons-vue";
 import { useI18n } from "vue-i18n";
-
-interface ServerStatus {
-  running: boolean;
-  pid: number | null;
-  url: string | null;
-  urls: string[];
-  port: number | null;
-}
+import type { ServerStatus } from "../types";
 
 defineProps<{
   serverStatus: ServerStatus | null;

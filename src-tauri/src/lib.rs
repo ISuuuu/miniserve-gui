@@ -125,7 +125,7 @@ pub(crate) mod job_object {
 
 // ============ App Entry ============
 
-fn show_window(app: &AppHandle) {
+pub fn show_window(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.unminimize();
         let _ = win.show();

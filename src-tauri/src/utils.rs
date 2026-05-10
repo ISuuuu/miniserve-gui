@@ -51,7 +51,12 @@ pub fn validate_config(cfg: &ServerConfig) -> Result<(), String> {
     if !cfg.color_scheme.is_empty() && !valid_schemes.contains(&cfg.color_scheme.as_str()) {
         return Err(format!("无效的配色方案: {}", cfg.color_scheme));
     }
-    
+
+    // 验证 mkdir 依赖 upload
+    if cfg.mkdir && !cfg.upload {
+        return Err("创建目录功能需要先开启上传功能".into());
+    }
+
     Ok(())
 }
 
@@ -139,11 +144,10 @@ pub fn build_miniserve_args(cfg: &ServerConfig) -> Result<Vec<String>, String> {
         }
     }
 
-    if cfg.upload {
+    if cfg.upload || cfg.mkdir {
         args.push("-u".into());
     }
     if cfg.mkdir {
-        args.push("-u".into());
         args.push("-U".into());
     }
     if cfg.media_controls {

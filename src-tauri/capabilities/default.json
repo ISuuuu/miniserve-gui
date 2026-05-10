@@ -6,9 +6,6 @@
   "permissions": [
     "core:default",
     "opener:default",
-    "shell:allow-open",
-    "http:default",
-    "fs:default",
     "dialog:default",
     "clipboard-manager:default",
     "updater:default",

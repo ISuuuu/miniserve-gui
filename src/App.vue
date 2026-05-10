@@ -9,48 +9,9 @@ import { useI18n } from "vue-i18n";
 import ConfigPanel from "./components/ConfigPanel.vue";
 import StatusCard from "./components/StatusCard.vue";
 import LogPanel from "./components/LogPanel.vue";
+import type { ServerConfig, ServerStatus, EngineStatus, QrResponse } from "./types";
 
 const { t } = useI18n();
-
-// ============ Types ============
-
-interface EngineStatus {
-  exists: boolean;
-  version: string | null;
-  path: string;
-}
-
-interface ServerConfig {
-  path: string;
-  port: number;
-  interfaces: string;
-  auth_username: string;
-  auth_password: string;
-  upload: boolean;
-  mkdir: boolean;
-  media_controls: boolean;
-  color_scheme: string;
-  title: string;
-  compress: string;
-  hidden: boolean;
-  thumbnails: boolean;
-  random_route: boolean;
-  readme: boolean;
-  download: boolean;
-  webdav: boolean;
-}
-
-interface ServerStatus {
-  running: boolean;
-  pid: number | null;
-  url: string | null;
-  urls: string[];
-  port: number | null;
-}
-
-interface QrResponse {
-  data: string;
-}
 
 // ============ State ============
 
@@ -238,15 +199,10 @@ async function openUrl(url: string) {
 // ============ Path Selection ============
 
 async function selectPath() {
-  try {
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    const selected = await open({ directory: true, multiple: false });
-    if (selected) {
-      config.path = selected as string;
-    }
-  } catch (e) {
-    const dir = window.prompt("请输入文件夹路径:");
-    if (dir) config.path = dir;
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const selected = await open({ directory: true, multiple: false });
+  if (selected) {
+    config.path = selected as string;
   }
 }
 
@@ -279,11 +235,15 @@ watch(
   { deep: true }
 );
 
+const unlistenFns: (() => void)[] = [];
+
 onUnmounted(() => {
   if (saveTimeout) {
     clearTimeout(saveTimeout);
     saveTimeout = null;
   }
+  unlistenFns.forEach(fn => fn());
+  unlistenFns.length = 0;
 });
 
 // ============ App Update ============
@@ -440,17 +400,23 @@ onMounted(async () => {
   await checkEngine();
   await loadConfig();
 
-  await listen<number>("download-progress", (event) => {
-    progress.value = event.payload;
-  });
+  unlistenFns.push(
+    await listen<number>("download-progress", (event) => {
+      progress.value = event.payload;
+    })
+  );
 
-  await listen("server-started", (event) => {
-    addLog("Server event: " + JSON.stringify(event.payload));
-  });
+  unlistenFns.push(
+    await listen("server-started", (event) => {
+      addLog("Server event: " + JSON.stringify(event.payload));
+    })
+  );
 
-  await listen<string>("server-log", (event) => {
-    addLog(event.payload);
-  });
+  unlistenFns.push(
+    await listen<string>("server-log", (event) => {
+      addLog(event.payload);
+    })
+  );
 });
 </script>
 

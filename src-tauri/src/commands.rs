@@ -6,7 +6,7 @@ use std::thread;
 use futures_util::StreamExt;
 use log::info;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
 
 use crate::state::{AppState, EngineStatus, QrCodeResponse, ServerConfig, ServerStatus};
 use crate::utils::{build_miniserve_args, get_config_path, get_engine_path, get_local_ips, validate_config};
@@ -23,13 +23,13 @@ pub async fn get_engine_status() -> Result<EngineStatus, String> {
     let version = if exists {
         let mut cmd = Command::new(&path);
         cmd.arg("--version");
-        
+
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
             cmd.creation_flags(CREATE_NO_WINDOW);
         }
-        
+
         let output = cmd
             .output()
             .ok()
@@ -71,10 +71,16 @@ pub async fn download_engine(
     struct Asset {
         name: String,
         browser_download_url: String,
+        #[serde(default)]
+        digest: Option<String>,
     }
 
     let original_url = "https://api.github.com/repos/svenstaro/miniserve/releases/latest";
     let proxy_prefix = get_proxy_prefix(&app_handle).unwrap_or_default();
+    // 校验代理 URL 格式：必须以 / 结尾或为空
+    if !proxy_prefix.is_empty() && !proxy_prefix.ends_with('/') {
+        return Err("代理 URL 必须以 / 结尾，例如 https://proxy.example.com/".into());
+    }
     let proxy_url = if proxy_prefix.is_empty() {
         String::new()
     } else {
@@ -193,6 +199,28 @@ pub async fn download_engine(
     }
 
     drop(file);
+
+    // SHA256 校验：使用 GitHub API 返回的 asset digest 字段
+    if let Some(ref digest) = asset.digest {
+        // digest 格式为 "sha256:<hex>"
+        if let Some(expected_hex) = digest.strip_prefix("sha256:") {
+            use sha2::{Sha256, Digest};
+            let downloaded_bytes = fs::read(&tmp_path).map_err(|e| e.to_string())?;
+            let actual_hash = format!("{:x}", Sha256::digest(&downloaded_bytes));
+            let expected_hash = expected_hex.to_lowercase();
+            if actual_hash != expected_hash {
+                let _ = fs::remove_file(&tmp_path);
+                return Err(format!(
+                    "SHA256 校验失败，文件可能已被篡改\n期望: {}\n实际: {}",
+                    expected_hash, actual_hash
+                ));
+            }
+            info!("SHA256 校验通过: {}", actual_hash);
+        }
+    } else {
+        info!("GitHub API 未返回 digest 字段，跳过 SHA256 校验");
+    }
+
     fs::rename(&tmp_path, &dest_path).map_err(|e| e.to_string())?;
 
     #[cfg(not(windows))]
@@ -246,7 +274,7 @@ pub async fn start_server(
 ) -> Result<ServerStatus, String> {
     // 验证配置
     validate_config(&config)?;
-    
+
     // Kill existing and clean up job object
     {
         let mut child_guard = state.child.lock().map_err(|e| e.to_string())?;
@@ -350,8 +378,7 @@ pub async fn start_server(
     });
 
     // Wait briefly and check if process is still running
-    use std::time::Duration;
-    thread::sleep(Duration::from_millis(800));
+    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
 
     if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
         // Re-construct command string for error message
@@ -517,6 +544,28 @@ pub fn get_proxy_prefix(app_handle: &AppHandle) -> Option<String> {
     config.proxy
 }
 
+/// 以 root 权限替换 AppImage。shell 片段是固定字符串，路径只通过 argv 传入，
+/// 避免拼接用户可控路径，也不在 /tmp 落可被替换的脚本文件。
+#[cfg(target_os = "linux")]
+fn run_pkexec_appimage_replace(
+    target_path: &str,
+    source_path: &str,
+    final_path: &str,
+) -> Result<std::process::Output, String> {
+    std::process::Command::new("pkexec")
+        .args([
+            "sh",
+            "-c",
+            "set -e; rm -f -- \"$1\"; cp -- \"$2\" \"$3\"",
+            "miniserve-gui-update",
+            target_path,
+            source_path,
+            final_path,
+        ])
+        .output()
+        .map_err(|e| format!("pkexec 执行失败: {}", e))
+}
+
 #[tauri::command]
 pub fn get_updater_config(app_handle: AppHandle) -> Result<UpdaterConfig, String> {
     let plugins = &app_handle.config().plugins.0;
@@ -600,16 +649,17 @@ pub async fn download_and_install_update(
     #[cfg(target_os = "linux")]
     {
         use std::os::unix::fs::PermissionsExt;
-        use std::process::Command;
 
         let source_path = temp_path.to_string_lossy().to_string();
 
-        let output = if source_path.ends_with(".deb") {
+        let (output, relaunch_path) = if source_path.ends_with(".deb") {
             info!("检测到 deb 文件，使用 dpkg 安装...");
-            let cmd = format!("dpkg -i '{}'", source_path);
-            Command::new("pkexec")
-                .args(["sh", "-c", &cmd])
+            // 直接传参给 pkexec，不经过 sh -c，避免 shell 注入
+            let output = std::process::Command::new("pkexec")
+                .args(["dpkg", "-i", &source_path])
                 .output()
+                .map_err(|e| format!("pkexec 执行失败: {}", e))?;
+            (output, None)
         } else {
             info!("执行 AppImage/二进制文件 替换...");
             // 设置可执行权限
@@ -624,38 +674,30 @@ pub async fn download_and_install_update(
                 std::env::current_exe().map_err(|e| e.to_string())?.to_string_lossy().to_string()
             };
 
-            // 计算新的 AppImage 文件名
             let target_path_buf = std::path::PathBuf::from(&target_path);
             let target_dir = target_path_buf.parent().unwrap().to_string_lossy().to_string();
-            // 新文件名为: miniserve-gui_v{version}_x86_64.AppImage
-            let new_target_name = format!("miniserve-gui_{}_x86_64.AppImage", version);
+            let arch = std::env::consts::ARCH;
+            let new_target_name = format!("miniserve-gui_{}_{}.AppImage", version, arch);
             let final_path = format!("{}/{}", target_dir, new_target_name);
 
-            // 替换文件并重命名
-            let cmd = format!("rm -f '{}' && cp '{}' '{}'", target_path, source_path, final_path);
-            
-            // 为了防止用户是在终端直接通过旧名字运行导致重启找不到文件
-            // 我们设置一个临时的环境变量或者让 tauri 依靠重启时传入的参数，但这里最安全的是覆盖并重命名
-            // 注意：如果重命名了，原有的快捷方式可能会失效。更好的做法是覆盖原内容，但不改名，或者覆盖后再建立一个同名软链接。
-            // 这里我们选择：覆盖原内容，然后将文件重命名，如果用户通过双击运行，下次需点击新文件。
-            Command::new("pkexec")
-                .args(["sh", "-c", &cmd])
-                .output()
+            let output = run_pkexec_appimage_replace(&target_path, &source_path, &final_path)?;
+            (output, Some(final_path))
         };
 
-        match output {
-            Ok(o) if o.status.success() => {
-                info!("更新安装成功，重启应用");
+        if output.status.success() {
+            info!("更新安装成功，重启应用");
+            if let Some(path) = relaunch_path {
+                std::process::Command::new(&path)
+                    .spawn()
+                    .map_err(|e| format!("启动新版 AppImage 失败: {}", e))?;
+                app_handle.exit(0);
+            } else {
                 app_handle.restart();
             }
-            Ok(o) => {
-                let stderr = String::from_utf8_lossy(&o.stderr);
-                log::error!("pkexec 失败: {}", stderr);
-                return Err(format!("更新失败: {}", stderr.trim()));
-            }
-            Err(e) => {
-                return Err(format!("pkexec 执行失败: {}", e));
-            }
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            log::error!("pkexec 失败: {}", stderr);
+            return Err(format!("更新失败: {}", stderr.trim()));
         }
     }
 
@@ -701,8 +743,8 @@ pub fn get_package_type() -> String {
         let is_installer = std::env::current_exe()
             .map(|p| {
                 if let Some(dir) = p.parent() {
-                    dir.join("Uninstall miniserve-gui.exe").exists() 
-                    || dir.join("unins000.exe").exists() 
+                    dir.join("Uninstall miniserve-gui.exe").exists()
+                    || dir.join("unins000.exe").exists()
                     || dir.to_string_lossy().to_lowercase().contains("program files")
                     || dir.to_string_lossy().to_lowercase().contains("appdata\\local\\programs")
                 } else {
@@ -723,20 +765,6 @@ pub fn get_package_type() -> String {
 
 #[tauri::command]
 pub fn show_window_command(app_handle: AppHandle) -> Result<(), String> {
-    show_window(&app_handle);
+    crate::show_window(&app_handle);
     Ok(())
-}
-
-pub fn show_window(app: &AppHandle) {
-    if let Some(win) = app.get_webview_window("main") {
-        let _ = win.unminimize();
-        let _ = win.show();
-        let _ = win.set_focus();
-
-        #[cfg(target_os = "windows")]
-        {
-            let _ = win.set_always_on_top(true);
-            let _ = win.set_always_on_top(false);
-        }
-    }
 }
