@@ -699,6 +699,7 @@ pub async fn download_and_install_update(
             log::error!("pkexec 失败: {}", stderr);
             return Err(format!("更新失败: {}", stderr.trim()));
         }
+        Ok(())
     }
 
     #[cfg(target_os = "macos")]
