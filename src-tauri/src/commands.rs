@@ -675,10 +675,13 @@ pub async fn download_and_install_update(
             };
 
             let target_path_buf = std::path::PathBuf::from(&target_path);
-            let target_dir = target_path_buf.parent().unwrap().to_string_lossy().to_string();
-            let arch = std::env::consts::ARCH;
-            let new_target_name = format!("miniserve-gui_{}_{}.AppImage", version, arch);
-            let final_path = format!("{}/{}", target_dir, new_target_name);
+            let target_dir = target_path_buf.parent().unwrap();
+            let final_name = url
+                .split('/')
+                .last()
+                .filter(|name| name.ends_with(".AppImage"))
+                .ok_or("无法从更新 URL 获取 AppImage 文件名")?;
+            let final_path = target_dir.join(final_name).to_string_lossy().to_string();
 
             let output = run_pkexec_appimage_replace(&target_path, &source_path, &final_path)?;
             (output, Some(final_path))

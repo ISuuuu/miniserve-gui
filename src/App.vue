@@ -325,6 +325,10 @@ async function checkForUpdates() {
         }).catch(() => {});
         return;
       }
+      if (packageType === "appimage") {
+        await installAppImageUpdate(update.version, originalUrl, proxyUrl);
+        return;
+      }
       await installUpdate(update);
     } else {
       ElMessage.info(t('update.alreadyLatest'));
@@ -352,6 +356,37 @@ function getArch(): string {
     if (arch.includes('arm') || arch.includes('aarch64')) return 'aarch64';
   }
   return 'x86_64';
+}
+
+async function fetchUpdateManifest(originalUrl: string, proxyUrl: string) {
+  let resp: Response;
+  try {
+    resp = await fetch(originalUrl);
+  } catch (e) {
+    if (!proxyUrl) throw e;
+    resp = await fetch(proxyUrl);
+  }
+
+  if (!resp.ok && proxyUrl && resp.url !== proxyUrl) {
+    resp = await fetch(proxyUrl);
+  }
+  if (!resp.ok) throw new Error(`更新清单响应异常: ${resp.status}`);
+  return await resp.json();
+}
+
+async function installAppImageUpdate(version: string, originalUrl: string, proxyUrl: string) {
+  const updateJson = await fetchUpdateManifest(originalUrl, proxyUrl);
+  const latestVersion = (version || updateJson.version || '').replace(/^v/, '');
+  const platform = `${getPlatform()}-${getArch()}`;
+  const platformInfo = updateJson.platforms?.[platform];
+  if (!platformInfo) throw new Error(t('update.platformNotAvailable', { platform }));
+
+  ElMessage.success(t('update.downloading', { version: latestVersion }));
+  await invoke('download_and_install_update', {
+    url: platformInfo.url,
+    signature: platformInfo.signature,
+    version: latestVersion,
+  });
 }
 
 async function installUpdate(update: any) {
