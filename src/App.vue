@@ -35,6 +35,7 @@ const updaterModule = useUpdater(
 // ============ Local State ============
 
 const copySuccessIdx = ref<Set<number>>(new Set());
+const copyTimers = new Map<number, ReturnType<typeof setTimeout>>();
 const hoveredIdx = ref<number | null>(null);
 const hoveredFeature = ref("");
 const appVersion = ref("");
@@ -49,11 +50,13 @@ async function copyUrl(url?: string, idx?: number) {
     await navigator.clipboard.writeText(urlToCopy);
     if (idx !== undefined) {
       copySuccessIdx.value = new Set([...copySuccessIdx.value, idx]);
-      setTimeout(() => {
+      if (copyTimers.has(idx)) clearTimeout(copyTimers.get(idx));
+      copyTimers.set(idx, setTimeout(() => {
         const next = new Set(copySuccessIdx.value);
         next.delete(idx);
         copySuccessIdx.value = next;
-      }, 2000);
+        copyTimers.delete(idx);
+      }, 2000));
     }
     ElMessage.success(t("messages.linkCopied"));
   } catch {
@@ -84,13 +87,13 @@ async function selectPath() {
 const unlistenFns: (() => void)[] = [];
 
 onMounted(async () => {
-  setTimeout(async () => {
-    try {
-      await invoke("show_window_command");
-    } catch (e) {
-      console.error("Failed to show window:", e);
-    }
-  }, 100);
+  try {
+    await invoke("show_window_command");
+  } catch (e) {
+    console.error("Failed to show window:", e);
+  }
+
+
 
   try {
     appVersion.value = await getVersion();

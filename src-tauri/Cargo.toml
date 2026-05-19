@@ -2,7 +2,7 @@
 name = "miniserve-gui"
 version = "0.0.0"
 description = "A Tauri App"
-authors = ["you"]
+authors = ["kim"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
