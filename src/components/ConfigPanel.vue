@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { FolderOpened, Setting, Lock, Picture, MagicStick } from "@element-plus/icons-vue";
 import { useI18n } from "vue-i18n";
+import TogglePill from "./TogglePill.vue";
 import type { ServerConfig } from "../types";
 
 defineProps<{
@@ -31,13 +32,11 @@ const featureDescriptions: Record<string, string> = {
   download: t('features.download'),
   readme: t('features.readme'),
   hidden: t('features.hidden'),
+  media_controls: t('features.mediaControls'),
+  thumbnails: t('features.thumbnails'),
 };
 
 const hoveredFeature = defineModel<string>("hoveredFeature", { default: "" });
-
-function selectPath() {
-  emit("selectPath");
-}
 </script>
 
 <template>
@@ -47,7 +46,7 @@ function selectPath() {
       <el-form-item :label="t('config.sharePath')">
         <div class="path-row">
           <el-input v-model="config.path" :placeholder="t('config.sharePathPlaceholder')" readonly />
-          <el-button type="primary" :icon="FolderOpened" @click="selectPath" />
+          <el-button type="primary" :icon="FolderOpened" @click="emit('selectPath')" />
         </div>
       </el-form-item>
 
@@ -81,23 +80,8 @@ function selectPath() {
       </el-form-item>
 
       <div class="toggle-row">
-        <button
-          type="button"
-          class="toggle-pill"
-          :class="{ active: config.upload }"
-          @click="config.upload = !config.upload"
-        >
-          <span class="toggle-dot" />{{ t('config.upload') }}
-        </button>
-        <button
-          type="button"
-          class="toggle-pill"
-          :class="{ active: config.mkdir }"
-          v-if="config.upload"
-          @click="config.mkdir = !config.mkdir"
-        >
-          <span class="toggle-dot" />{{ t('config.mkdir') }}
-        </button>
+        <TogglePill v-model="config.upload" :label="t('config.upload')" />
+        <TogglePill v-if="config.upload" v-model="config.mkdir" :label="t('config.mkdir')" />
       </div>
 
       <div class="section-title"><el-icon><Picture /></el-icon> {{ t('config.display') }}</div>
@@ -118,60 +102,13 @@ function selectPath() {
 
       <div class="section-title"><el-icon><MagicStick /></el-icon> {{ t('config.advanced') }}</div>
       <div class="two-col">
-        <button
-          type="button"
-          class="toggle-pill"
-          :class="{ active: config.random_route }"
-          @click="config.random_route = !config.random_route"
-          @mouseenter="hoveredFeature = 'random_route'"
-          @mouseleave="hoveredFeature = ''"
-        >
-          <span class="toggle-dot" />{{ t('config.randomRoute') }}
-        </button>
-
-        <button
-          type="button"
-          class="toggle-pill"
-          :class="{ active: config.webdav }"
-          @click="config.webdav = !config.webdav"
-          @mouseenter="hoveredFeature = 'webdav'"
-          @mouseleave="hoveredFeature = ''"
-        >
-          <span class="toggle-dot" />{{ t('config.webdav') }}
-        </button>
-
-        <button
-          type="button"
-          class="toggle-pill"
-          :class="{ active: config.download }"
-          @click="config.download = !config.download"
-          @mouseenter="hoveredFeature = 'download'"
-          @mouseleave="hoveredFeature = ''"
-        >
-          <span class="toggle-dot" />{{ t('config.download') }}
-        </button>
-
-        <button
-          type="button"
-          class="toggle-pill"
-          :class="{ active: config.readme }"
-          @click="config.readme = !config.readme"
-          @mouseenter="hoveredFeature = 'readme'"
-          @mouseleave="hoveredFeature = ''"
-        >
-          <span class="toggle-dot" />{{ t('config.readme') }}
-        </button>
-
-        <button
-          type="button"
-          class="toggle-pill"
-          :class="{ active: config.hidden }"
-          @click="config.hidden = !config.hidden"
-          @mouseenter="hoveredFeature = 'hidden'"
-          @mouseleave="hoveredFeature = ''"
-        >
-          <span class="toggle-dot" />{{ t('config.hidden') }}
-        </button>
+        <TogglePill v-model="config.random_route" :label="t('config.randomRoute')" feature-key="random_route" @hover="hoveredFeature = $event" />
+        <TogglePill v-model="config.webdav" :label="t('config.webdav')" feature-key="webdav" @hover="hoveredFeature = $event" />
+        <TogglePill v-model="config.download" :label="t('config.download')" feature-key="download" @hover="hoveredFeature = $event" />
+        <TogglePill v-model="config.readme" :label="t('config.readme')" feature-key="readme" @hover="hoveredFeature = $event" />
+        <TogglePill v-model="config.hidden" :label="t('config.hidden')" feature-key="hidden" @hover="hoveredFeature = $event" />
+        <TogglePill v-model="config.media_controls" :label="t('config.mediaControls')" feature-key="media_controls" @hover="hoveredFeature = $event" />
+        <TogglePill v-model="config.thumbnails" :label="t('config.thumbnails')" feature-key="thumbnails" @hover="hoveredFeature = $event" />
       </div>
     </el-form>
 
@@ -221,49 +158,6 @@ function selectPath() {
   flex-wrap: wrap;
   margin: 4px 0 8px;
   padding-left: 80px;
-}
-
-.toggle-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  border-radius: 6px;
-  border: none;
-  background: #F4F4F5;
-  color: #3F3F46;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  user-select: none;
-  white-space: nowrap;
-  outline: none;
-}
-
-.toggle-pill:hover {
-  background: #E4E4E7;
-}
-
-.toggle-pill.active {
-  background: #F4F4F5;
-  color: #3F3F46;
-}
-
-.toggle-pill.active:hover {
-  background: #E4E4E7;
-}
-
-.toggle-pill.active .toggle-dot {
-  background: #409EFF;
-}
-
-.toggle-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #A1A1AA;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
 }
 
 .two-col {

@@ -17,10 +17,7 @@ const logBoxRef = ref<HTMLElement | null>(null);
 watch(() => props.logs.length, async () => {
   await nextTick();
   if (logBoxRef.value) {
-    const lastLog = logBoxRef.value.querySelector('.log-line:last-child');
-    if (lastLog) {
-      lastLog.scrollIntoView({ behavior: 'smooth' });
-    }
+    logBoxRef.value.scrollTop = logBoxRef.value.scrollHeight;
   }
 });
 

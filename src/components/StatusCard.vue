@@ -11,25 +11,13 @@ defineProps<{
   hoveredIdx: number | null;
 }>();
 
-const emit = defineEmits<{
+defineEmits<{
   copyUrl: [url: string, idx: number];
   openUrl: [url: string];
   hoverUrl: [idx: number | null];
 }>();
 
 const { t } = useI18n();
-
-function copyUrl(url: string, idx: number) {
-  emit("copyUrl", url, idx);
-}
-
-function openUrl(url: string) {
-  emit("openUrl", url);
-}
-
-function hoverUrl(idx: number | null) {
-  emit("hoverUrl", idx);
-}
 </script>
 
 <template>
@@ -42,18 +30,18 @@ function hoverUrl(idx: number | null) {
     </template>
     <div class="url-layout">
       <div class="url-column">
-        <div 
-          v-for="(url, idx) in serverUrls" 
-          :key="idx" 
+        <div
+          v-for="(url, idx) in serverUrls"
+          :key="idx"
           class="url-item"
           :class="{ active: hoveredIdx === idx }"
-          @mouseenter="hoverUrl(idx)"
-          @mouseleave="hoverUrl(null)"
+          @mouseenter="$emit('hoverUrl', idx)"
+          @mouseleave="$emit('hoverUrl', null)"
         >
-          <el-link type="primary" :href="url" :underline="false" @click.prevent="openUrl(url)">
+          <el-link type="primary" :href="url" :underline="false" @click.prevent="$emit('openUrl', url)">
             {{ url }}
           </el-link>
-          <el-button type="primary" size="small" text @click="copyUrl(url, idx)">
+          <el-button type="primary" size="small" text @click="$emit('copyUrl', url, idx)">
             <el-icon><DocumentCopy /></el-icon>
             {{ copySuccessIdx.has(idx) ? t('status.copied') : t('status.copy') }}
           </el-button>
