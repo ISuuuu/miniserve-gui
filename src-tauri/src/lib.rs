@@ -158,7 +158,6 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(state::AppState::default())
@@ -179,20 +178,7 @@ pub fn run() {
                     }
                     "quit" => {
                         let state = app.state::<state::AppState>();
-                        if let Ok(mut child_guard) = state.child.lock() {
-                            if let Some(mut c) = child_guard.take() {
-                                let _ = c.kill();
-                                let _ = c.wait();
-                            }
-                        }
-                        #[cfg(windows)]
-                        {
-                            if let Ok(mut job_guard) = state.job_handle.lock() {
-                                if let Some(job) = job_guard.take() {
-                                    job_object::close_job(job);
-                                }
-                            }
-                        }
+                        let _ = state.kill_child();
                         app.exit(0);
                     }
                     _ => {}

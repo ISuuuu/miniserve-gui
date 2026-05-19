@@ -1,176 +1,49 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted, watch } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage } from "element-plus";
 import { Download, VideoPlay, VideoPause, Refresh, InfoFilled } from "@element-plus/icons-vue";
 import { getVersion } from "@tauri-apps/api/app";
 import { useI18n } from "vue-i18n";
 import ConfigPanel from "./components/ConfigPanel.vue";
 import StatusCard from "./components/StatusCard.vue";
 import LogPanel from "./components/LogPanel.vue";
-import type { ServerConfig, ServerStatus, EngineStatus, QrResponse } from "./types";
+import { useLogs } from "./composables/useLogs";
+import { useEngine } from "./composables/useEngine";
+import { useConfig } from "./composables/useConfig";
+import { useServer } from "./composables/useServer";
+import { useUpdater } from "./composables/useUpdater";
 
 const { t } = useI18n();
 
-// ============ State ============
+// ============ Composables ============
 
-const engineStatus = ref<EngineStatus | null>(null);
-const serverStatus = ref<ServerStatus | null>(null);
-const downloading = ref(false);
-const progress = ref(0);
-const loading = ref(false);
-const qrCodes = ref<string[]>([]);
-const serverUrls = ref<string[]>([]);
-const logs = ref<string[]>([]);
+const logsModule = useLogs();
+const engineModule = useEngine();
+const configModule = useConfig();
+const serverModule = useServer(
+  configModule.config,
+  () => !!engineModule.engineStatus.value?.exists,
+  logsModule,
+);
+const updaterModule = useUpdater(
+  () => appVersion.value,
+  logsModule,
+);
+
+// ============ Local State ============
+
 const copySuccessIdx = ref<Set<number>>(new Set());
 const hoveredIdx = ref<number | null>(null);
 const hoveredFeature = ref("");
-
 const appVersion = ref("");
 const aboutVisible = ref(false);
-const checkingUpdate = ref(false);
-const updateDownloading = ref(false);
-const updateProgress = ref(0);
 
-const config = reactive<ServerConfig>({
-  path: "",
-  port: 8080,
-  interfaces: "::",
-  auth_username: "",
-  auth_password: "",
-  upload: false,
-  mkdir: false,
-  media_controls: false,
-  color_scheme: "squirrel",
-  title: "miniserve",
-  compress: "",
-  hidden: false,
-  thumbnails: false,
-  random_route: false,
-  readme: false,
-  download: false,
-  webdav: false,
-});
-
-// ============ Engine Management ============
-
-async function checkEngine() {
-  try {
-    engineStatus.value = await invoke<EngineStatus>("get_engine_status");
-    if (engineStatus.value && !engineStatus.value.exists) {
-      ElMessage.info(t('messages.engineNotInstalledInfo'));
-    }
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-async function downloadEngine() {
-  downloading.value = true;
-  progress.value = 0;
-  ElMessage.info(t('messages.startDownloadEngine'));
-  try {
-    const result = await invoke<string>("download_engine");
-    downloading.value = false;
-    ElMessage.success(t('messages.downloadEngineSuccess', { result }));
-    await checkEngine();
-  } catch (e) {
-    downloading.value = false;
-    ElMessage.error(t('messages.downloadEngineFailed', { error: e }));
-  }
-}
-
-// ============ Config ============
-
-async function loadConfig() {
-  try {
-    const saved = await invoke<ServerConfig>("load_config");
-    // 兼容老版本配置：统一升级为双栈监听
-    if (saved && saved.interfaces === "0.0.0.0") {
-      saved.interfaces = "::";
-    }
-    Object.assign(config, saved);
-  } catch (e) {
-    console.error("Failed to load config:", e);
-  }
-}
-
-async function saveConfig() {
-  try {
-    await invoke("save_config", { config: { ...config } });
-  } catch (e) {
-    console.error("Save config failed:", e);
-  }
-}
-
-// ============ Server Control ============
-
-async function startServer() {
-  if (!config.path) {
-    ElMessage.warning(t('messages.selectFolderFirst'));
-    return;
-  }
-  if (!engineStatus.value?.exists) {
-    ElMessage.warning(t('messages.downloadEngineFirst'));
-    return;
-  }
-  loading.value = true;
-  addLog(t('messages.startingService'));
-  try {
-    const status = await invoke<ServerStatus>("start_server", { config: { ...config } });
-    serverStatus.value = status;
-    addLog(t('messages.startComplete', { status: JSON.stringify(status) }));
-    
-    const urlsToShow = status.urls && status.urls.length > 0 ? status.urls : (status.url ? [status.url] : []);
-    if (urlsToShow.length > 0) {
-      addLog(t('messages.serviceStarted', { urls: urlsToShow.join(', ') }));
-      ElMessage.success(t('messages.serviceStarted', { urls: '' }));
-      serverUrls.value = urlsToShow;
-      qrCodes.value = await Promise.all(
-        urlsToShow.map(url => generateQr(url))
-      );
-    }
-  } catch (e) {
-    addLog(t('messages.startFailed', { error: e }));
-    ElMessage.error(t('messages.startFailed', { error: e }));
-  } finally {
-    loading.value = false;
-    addLog(t('messages.loadingReset'));
-  }
-}
-
-async function stopServer() {
-  loading.value = true;
-  addLog(t('messages.stoppingService'));
-  try {
-    await invoke("stop_server");
-    serverStatus.value = { running: false, pid: null, url: null, urls: [], port: null };
-    qrCodes.value = [];
-    serverUrls.value = [];
-    addLog(t('messages.serviceStopped'));
-    ElMessage.info(t('messages.serviceStopped'));
-  } catch (e) {
-    ElMessage.error(t('messages.stopFailed', { error: e }));
-  } finally {
-    loading.value = false;
-  }
-}
-
-// ============ QR Code ============
-
-async function generateQr(url: string): Promise<string> {
-  try {
-    const resp = await invoke<QrResponse>("generate_qr", { data: url });
-    return resp.data;
-  } catch (e) {
-    console.error("QR generation failed:", e);
-    return "";
-  }
-}
+// ============ Clipboard & URL ============
 
 async function copyUrl(url?: string, idx?: number) {
-  const urlToCopy = url || serverStatus.value?.url || "";
+  const urlToCopy = url || serverModule.serverStatus.value?.url || "";
   if (!urlToCopy) return;
   try {
     await navigator.clipboard.writeText(urlToCopy);
@@ -182,257 +55,33 @@ async function copyUrl(url?: string, idx?: number) {
         copySuccessIdx.value = next;
       }, 2000);
     }
-    ElMessage.success(t('messages.linkCopied'));
+    ElMessage.success(t("messages.linkCopied"));
   } catch {
-    ElMessage.error(t('messages.copyFailed'));
+    ElMessage.error(t("messages.copyFailed"));
   }
 }
 
 async function openUrl(url: string) {
   try {
-    const { openUrl: tauriOpenUrl } = await import('@tauri-apps/plugin-opener');
+    const { openUrl: tauriOpenUrl } = await import("@tauri-apps/plugin-opener");
     await tauriOpenUrl(url);
   } catch (e) {
     console.error("Failed to open URL:", e);
-    ElMessage.error(t('messages.openUrlFailed', { error: e }));
+    ElMessage.error(t("messages.openUrlFailed", { error: e }));
   }
 }
-
-// ============ Path Selection ============
 
 async function selectPath() {
   const { open } = await import("@tauri-apps/plugin-dialog");
   const selected = await open({ directory: true, multiple: false });
   if (selected) {
-    config.path = selected as string;
+    configModule.config.path = selected as string;
   }
 }
 
-// ============ Logs ============
-
-function addLog(msg: string) {
-  logs.value.push(msg);
-  if (logs.value.length > 200) logs.value.shift();
-}
-
-function clearLogs() {
-  logs.value = [];
-}
-
-// ============ Auto Save ============
-
-watch(() => config.upload, (val) => {
-  if (!val) config.mkdir = false;
-});
-
-let saveTimeout: ReturnType<typeof setTimeout> | null = null;
-watch(
-  config,
-  () => {
-    if (saveTimeout) clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(() => {
-      saveConfig();
-    }, 500);
-  },
-  { deep: true }
-);
+// ============ Event Listeners ============
 
 const unlistenFns: (() => void)[] = [];
-
-onUnmounted(() => {
-  if (saveTimeout) {
-    clearTimeout(saveTimeout);
-    saveTimeout = null;
-  }
-  unlistenFns.forEach(fn => fn());
-  unlistenFns.length = 0;
-});
-
-// ============ App Update ============
-
-interface UpdaterConfig {
-  endpoints: string[];
-  proxy: string | null;
-}
-
-async function checkForUpdates() {
-  if (checkingUpdate.value) return;
-  checkingUpdate.value = true;
-  addLog(t('update.checking'));
-
-  try {
-    const updaterConfig = await invoke<UpdaterConfig>("get_updater_config");
-    const originalUrl = updaterConfig.endpoints[0] || "";
-    const proxyPrefix = updaterConfig.proxy || "";
-    const proxyUrl = proxyPrefix ? `${proxyPrefix}${originalUrl}` : "";
-
-    const { check } = await import('@tauri-apps/plugin-updater');
-    
-    let update = null;
-    try {
-      update = await Promise.race([
-        check(),
-        new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
-      ]);
-    } catch (e) {
-      if (!proxyUrl) throw e;
-      
-      addLog(t('update.directConnectTimeout', { proxy: proxyUrl }));
-      const resp = await fetch(proxyUrl);
-      if (!resp.ok) throw new Error(`代理响应异常: ${resp.status}`);
-      const updateJson = await resp.json();
-
-      const currentVersion = appVersion.value.replace(/^v/, '');
-      const latestVersion = (updateJson.version || '').replace(/^v/, '');
-      
-      if (latestVersion && latestVersion !== currentVersion) {
-        addLog(t('update.newVersion', { version: latestVersion, current: currentVersion }));
-        const platform = `${getPlatform()}-${getArch()}`;
-        const platformInfo = updateJson.platforms?.[platform];
-        if (!platformInfo) throw new Error(t('update.platformNotAvailable', { platform }));
-
-        ElMessage.success(t('update.downloading', { version: latestVersion }));
-        await invoke('download_and_install_update', {
-          url: platformInfo.url,
-          signature: platformInfo.signature,
-          version: latestVersion,
-        });
-        const { relaunch } = await import('@tauri-apps/plugin-process');
-        await relaunch();
-        return;
-      }
-      update = null;
-    }
-
-    if (update) {
-      const packageType = await invoke<string>("get_package_type");
-      if (packageType === "deb" || packageType === "portable") {
-        addLog(t('update.debOrPortableNotSupported', { version: update.version, packageType }));
-        ElMessageBox.confirm(
-          t('update.debOrPortableNotSupported', { 
-            version: update.version, 
-            packageType: packageType === 'deb' ? 'DEB安装版' : 'Windows便携版' 
-          }),
-          '发现更新',
-          {
-            confirmButtonText: t('update.goToDownload'),
-            cancelButtonText: t('update.later'),
-            type: 'info'
-          }
-        ).then(() => {
-          const releaseUrl = t('update.releasePage');
-          openUrl(releaseUrl);
-        }).catch(() => {});
-        return;
-      }
-      if (packageType === "appimage") {
-        await installAppImageUpdate(update.version, originalUrl, proxyUrl);
-        return;
-      }
-      await installUpdate(update);
-    } else {
-      ElMessage.info(t('update.alreadyLatest'));
-    }
-  } catch (e: any) {
-    addLog(t('update.checkFailed', { error: e }));
-    ElMessage.error(t('update.checkFailed', { error: e.message || e }));
-  } finally {
-    checkingUpdate.value = false;
-  }
-}
-
-function getPlatform(): string {
-  const platform = navigator.platform.toLowerCase();
-  if (platform.includes('win')) return 'windows';
-  if (platform.includes('mac')) return 'darwin';
-  return 'linux';
-}
-
-function getArch(): string {
-  // @ts-ignore userAgentData is not in all TS lib versions
-  const uaData = navigator.userAgentData;
-  if (uaData?.platform) {
-    const arch = uaData.architecture || '';
-    if (arch.includes('arm') || arch.includes('aarch64')) return 'aarch64';
-  }
-  return 'x86_64';
-}
-
-async function fetchUpdateManifest(originalUrl: string, proxyUrl: string) {
-  let resp: Response;
-  try {
-    resp = await fetch(originalUrl);
-  } catch (e) {
-    if (!proxyUrl) throw e;
-    resp = await fetch(proxyUrl);
-  }
-
-  if (!resp.ok && proxyUrl && resp.url !== proxyUrl) {
-    resp = await fetch(proxyUrl);
-  }
-  if (!resp.ok) throw new Error(`更新清单响应异常: ${resp.status}`);
-  return await resp.json();
-}
-
-async function installAppImageUpdate(version: string, originalUrl: string, proxyUrl: string) {
-  const updateJson = await fetchUpdateManifest(originalUrl, proxyUrl);
-  const latestVersion = (version || updateJson.version || '').replace(/^v/, '');
-  const platform = `${getPlatform()}-${getArch()}`;
-  const platformInfo = updateJson.platforms?.[platform];
-  if (!platformInfo) throw new Error(t('update.platformNotAvailable', { platform }));
-
-  ElMessage.success(t('update.downloading', { version: latestVersion }));
-  await invoke('download_and_install_update', {
-    url: platformInfo.url,
-    signature: platformInfo.signature,
-    version: latestVersion,
-  });
-}
-
-async function installUpdate(update: any) {
-  let installDir = "";
-  try {
-    installDir = await invoke("get_install_dir");
-  } catch (e) {
-    console.warn("无法获取安装目录:", e);
-  }
-  const installerArgs = installDir ? ['/S', `/D=${installDir}`] : undefined;
-
-  ElMessage.success(t('update.downloading', { version: update.version }));
-  updateDownloading.value = true;
-  updateProgress.value = 0;
-  let totalSize = 0;
-  let downloaded = 0;
-  try {
-    await update.downloadAndInstall((event: any) => {
-      switch (event.event) {
-        case 'Started':
-          totalSize = event.data.contentLength || 0;
-          downloaded = 0;
-          addLog(t('update.downloadStarted', { size: event.data.contentLength }));
-          break;
-        case 'Progress':
-          downloaded += event.data.chunkLength || 0;
-          if (totalSize > 0) {
-            updateProgress.value = Math.min(99.9, (downloaded / totalSize) * 100);
-          }
-          addLog(t('update.downloadProgress', { size: event.data.chunkLength }));
-          break;
-        case 'Finished':
-          updateProgress.value = 100;
-          addLog(t('update.downloadFinished'));
-          break;
-      }
-    }, { installerArgs });
-  } finally {
-    updateDownloading.value = false;
-  }
-  ElMessage.success(t('update.updateComplete'));
-  const { relaunch } = await import('@tauri-apps/plugin-process');
-  await relaunch();
-}
-
-// ============ Lifecycle ============
 
 onMounted(async () => {
   setTimeout(async () => {
@@ -449,26 +98,32 @@ onMounted(async () => {
     console.warn("无法获取 Tauri 版本", e);
   }
 
-  await checkEngine();
-  await loadConfig();
+  await engineModule.checkEngine();
+  await configModule.loadConfig();
 
   unlistenFns.push(
     await listen<number>("download-progress", (event) => {
-      progress.value = event.payload;
-    })
+      engineModule.progress.value = event.payload;
+    }),
   );
 
   unlistenFns.push(
     await listen("server-started", (event) => {
-      addLog("Server event: " + JSON.stringify(event.payload));
-    })
+      logsModule.addLog("Server event: " + JSON.stringify(event.payload));
+    }),
   );
 
   unlistenFns.push(
     await listen<string>("server-log", (event) => {
-      addLog(event.payload);
-    })
+      logsModule.addLog(event.payload);
+    }),
   );
+});
+
+onUnmounted(() => {
+  configModule.cleanup();
+  unlistenFns.forEach((fn) => fn());
+  unlistenFns.length = 0;
 });
 </script>
 
@@ -478,49 +133,49 @@ onMounted(async () => {
     <header class="app-header">
       <div class="header-left">
         <div class="header-buttons">
-          <el-button 
-            type="success" 
-            :icon="VideoPlay" 
-            @click="startServer" 
-            :loading="loading"
+          <el-button
+            type="success"
+            :icon="VideoPlay"
+            @click="serverModule.startServer"
+            :loading="serverModule.loading.value"
           >
-            {{ serverStatus?.running ? t('header.restart') : t('header.start') }}
+            {{ serverModule.serverStatus.value?.running ? t('header.restart') : t('header.start') }}
           </el-button>
           <el-button
-            v-if="serverStatus?.running"
+            v-if="serverModule.serverStatus.value?.running"
             type="danger"
             :icon="VideoPause"
-            @click="stopServer"
-            :loading="loading"
+            @click="serverModule.stopServer"
+            :loading="serverModule.loading.value"
           >
             {{ t('header.stop') }}
           </el-button>
         </div>
       </div>
       <div class="header-actions">
-        <el-tag v-if="engineStatus?.exists" type="success" size="small">
-          {{ t('header.engineReady') }} {{ engineStatus.version ? `(${engineStatus.version})` : "" }}
+        <el-tag v-if="engineModule.engineStatus.value?.exists" type="success" size="small">
+          {{ t('header.engineReady') }} {{ engineModule.engineStatus.value.version ? `(${engineModule.engineStatus.value.version})` : "" }}
         </el-tag>
         <el-tag v-else type="warning" size="small">{{ t('header.engineNotInstalled') }}</el-tag>
         <el-button
-          v-if="!engineStatus?.exists"
+          v-if="!engineModule.engineStatus.value?.exists"
           type="primary"
           size="small"
           :icon="Download"
-          @click="downloadEngine"
-          :loading="downloading"
-          :disabled="serverStatus?.running"
+          @click="engineModule.downloadEngine"
+          :loading="engineModule.downloading.value"
+          :disabled="serverModule.serverStatus.value?.running"
         >
-          {{ downloading ? t('header.downloading', { progress: progress.toFixed(0) }) : t('header.downloadEngine') }}
+          {{ engineModule.downloading.value ? t('header.downloading', { progress: engineModule.progress.value.toFixed(0) }) : t('header.downloadEngine') }}
         </el-button>
         <el-button
           v-else
           type="info"
           size="small"
           :icon="Refresh"
-          @click="downloadEngine"
-          :loading="downloading"
-          :disabled="serverStatus?.running"
+          @click="engineModule.downloadEngine"
+          :loading="engineModule.downloading.value"
+          :disabled="serverModule.serverStatus.value?.running"
         >
           {{ t('header.updateEngine') }}
         </el-button>
@@ -548,10 +203,10 @@ onMounted(async () => {
       </div>
       <template #footer>
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <el-button 
-            type="primary" 
-            @click="checkForUpdates" 
-            :loading="checkingUpdate"
+          <el-button
+            type="primary"
+            @click="updaterModule.checkForUpdates"
+            :loading="updaterModule.checkingUpdate.value"
           >{{ t('about.checkUpdate') }}</el-button>
           <el-button @click="aboutVisible = false">{{ t('about.close') }}</el-button>
         </div>
@@ -559,23 +214,23 @@ onMounted(async () => {
     </el-dialog>
 
     <el-progress
-      v-if="downloading"
-      :percentage="progress"
+      v-if="engineModule.downloading.value"
+      :percentage="engineModule.progress.value"
       :format="(p: number) => `${p.toFixed(1)}%`"
       class="download-progress"
     />
 
     <el-progress
-      v-if="updateDownloading"
-      :percentage="updateProgress"
+      v-if="updaterModule.updateDownloading.value"
+      :percentage="updaterModule.updateProgress.value"
       :format="(p: number) => t('update.progressLabel', { percent: p.toFixed(1) })"
       class="download-progress"
     />
 
     <div class="main-layout">
       <!-- Config Panel -->
-      <ConfigPanel 
-        :config="config" 
+      <ConfigPanel
+        :config="configModule.config"
         :hovered-feature="hoveredFeature"
         @select-path="selectPath"
         @update:hovered-feature="hoveredFeature = $event"
@@ -585,9 +240,9 @@ onMounted(async () => {
       <main class="right-panel">
         <!-- Server Status Card -->
         <StatusCard
-          :server-status="serverStatus"
-          :server-urls="serverUrls"
-          :qr-codes="qrCodes"
+          :server-status="serverModule.serverStatus.value"
+          :server-urls="serverModule.serverUrls.value"
+          :qr-codes="serverModule.qrCodes.value"
           :copy-success-idx="copySuccessIdx"
           :hovered-idx="hoveredIdx"
           @copy-url="copyUrl"
@@ -597,8 +252,8 @@ onMounted(async () => {
 
         <!-- Log Panel -->
         <LogPanel
-          :logs="logs"
-          @clear-logs="clearLogs"
+          :logs="logsModule.logs.value"
+          @clear-logs="logsModule.clearLogs"
         />
       </main>
     </div>

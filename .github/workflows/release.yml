@@ -97,8 +97,7 @@ jobs:
             echo "::error::TAURI_SIGNING_PRIVATE_KEY is empty or missing!"
             exit 1
           else
-            echo "TAURI_SIGNING_PRIVATE_KEY is present."
-            echo "Key starts with: ${SIGN_KEY:0:30}..."
+            echo "TAURI_SIGNING_PRIVATE_KEY is present (length: ${#SIGN_KEY})."
           fi
 
       - name: Build Tauri app
@@ -147,19 +146,10 @@ jobs:
             gh release upload "$TAG" "$sig" --clobber
           done
 
-      - name: Debug - Check signing env
+      - name: Debug - Check build artifacts
         if: always()
         shell: bash
-        env:
-          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
-          echo "=== TAURI_SIGNING_PRIVATE_KEY status ==="
-          if [ -z "$KEY" ]; then
-            echo "EMPTY or NOT SET"
-          else
-            echo "SET - starts with: ${KEY:0:50}"
-          fi
-          echo ""
           echo "=== tauri.conf.json pubkey ==="
           grep pubkey src-tauri/tauri.conf.json || echo "No pubkey"
           echo ""

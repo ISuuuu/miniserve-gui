@@ -100,3 +100,25 @@ impl Default for AppState {
         }
     }
 }
+
+impl AppState {
+    /// Kill child process and clean up job object. Idempotent.
+    pub fn kill_child(&self) -> Result<(), String> {
+        let mut child_guard = self.child.lock().map_err(|e| e.to_string())?;
+        if let Some(mut c) = child_guard.take() {
+            let _ = c.kill();
+            let _ = c.wait();
+        }
+        drop(child_guard);
+
+        #[cfg(windows)]
+        {
+            if let Ok(mut job_guard) = self.job_handle.lock() {
+                if let Some(job) = job_guard.take() {
+                    crate::job_object::close_job(job);
+                }
+            }
+        }
+        Ok(())
+    }
+}

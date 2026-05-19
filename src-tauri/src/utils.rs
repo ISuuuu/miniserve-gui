@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use crate::state::ServerConfig;
 
-// ============ Helpers ============
+pub const VALID_COLOR_SCHEMES: &[&str] = &["squirrel", "archlinux", "zenburn", "monokai"];
 
 pub fn get_engine_path() -> PathBuf {
     let base = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("."));
@@ -47,8 +47,7 @@ pub fn validate_config(cfg: &ServerConfig) -> Result<(), String> {
     }
     
     // 验证配色方案
-    let valid_schemes = ["squirrel", "archlinux", "zenburn", "monokai"];
-    if !cfg.color_scheme.is_empty() && !valid_schemes.contains(&cfg.color_scheme.as_str()) {
+    if !cfg.color_scheme.is_empty() && !VALID_COLOR_SCHEMES.contains(&cfg.color_scheme.as_str()) {
         return Err(format!("无效的配色方案: {}", cfg.color_scheme));
     }
 
@@ -117,9 +116,8 @@ pub fn build_miniserve_args(cfg: &ServerConfig) -> Result<Vec<String>, String> {
     let mut args = vec![];
 
     // Path must come first (the root directory to serve)
-    if !cfg.path.is_empty() {
-        args.push(cfg.path.clone());
-    }
+    // validate_config already guarantees path is non-empty
+    args.push(cfg.path.clone());
 
     // Port
     args.push("-p".into());
@@ -153,9 +151,7 @@ pub fn build_miniserve_args(cfg: &ServerConfig) -> Result<Vec<String>, String> {
     if cfg.media_controls {
         args.push("--media-controls".into());
     }
-    // Valid values: squirrel, archlinux, zenburn, monokai
-    let valid = ["squirrel", "archlinux", "zenburn", "monokai"];
-    if valid.contains(&cfg.color_scheme.as_str()) {
+    if VALID_COLOR_SCHEMES.contains(&cfg.color_scheme.as_str()) {
         args.push("--color-scheme".into());
         args.push(cfg.color_scheme.clone());
     }

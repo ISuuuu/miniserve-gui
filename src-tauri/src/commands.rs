@@ -1,11 +1,12 @@
 use std::fs::{self, File};
-use std::io::Write as IoWrite;
+use std::io::{BufRead, BufReader, Write as IoWrite};
 use std::process::{Command, Stdio};
 use std::thread;
 
 use futures_util::StreamExt;
 use log::info;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, State};
 
 use crate::state::{AppState, EngineStatus, QrCodeResponse, ServerConfig, ServerStatus};
@@ -14,6 +15,85 @@ use crate::utils::{build_miniserve_args, get_config_path, get_engine_path, get_l
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
+// ============ Shared Helpers ============
+
+/// Run `miniserve --version` and return the version string (e.g. "0.27.0").
+fn get_engine_version(path: &std::path::Path) -> Option<String> {
+    let mut cmd = Command::new(path);
+    cmd.arg("--version");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd.output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|v| !v.is_empty())
+        .map(|v| v.replace("miniserve ", ""))
+}
+
+/// Prepend proxy prefix to a URL. Returns None if proxy is empty.
+fn apply_proxy(proxy_prefix: &str, url: &str) -> Option<String> {
+    if proxy_prefix.is_empty() {
+        None
+    } else {
+        Some(format!("{}{}", proxy_prefix, url))
+    }
+}
+
+/// Streaming SHA256 verification — reads file in 8KB chunks.
+fn verify_sha256(path: &std::path::Path, expected_hex: &str) -> Result<(), String> {
+    let mut file = File::open(path).map_err(|e| e.to_string())?;
+    let mut hasher = Sha256::new();
+    let mut buf = [0u8; 8192];
+    loop {
+        let n = std::io::Read::read(&mut file, &mut buf).map_err(|e| e.to_string())?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    let actual = format!("{:x}", hasher.finalize());
+    let expected = expected_hex.to_lowercase();
+    if actual != expected {
+        let _ = fs::remove_file(path);
+        return Err(format!(
+            "SHA256 校验失败，文件可能已被篡改\n期望: {}\n实际: {}",
+            expected, actual
+        ));
+    }
+    info!("SHA256 校验通过: {}", actual);
+    Ok(())
+}
+
+/// Build a reqwest::Client with proxy support.
+fn build_http_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .user_agent("miniserve-gui-downloader")
+        .build()
+        .map_err(|e| e.to_string())
+}
+
+/// Fetch with proxy fallback: try direct first, then proxy if it fails.
+async fn fetch_with_proxy(
+    client: &reqwest::Client,
+    direct_url: &str,
+    proxy_url: Option<&str>,
+) -> Result<reqwest::Response, String> {
+    match client.get(direct_url).send().await {
+        Ok(resp) if resp.status().is_success() => Ok(resp),
+        _ => {
+            if let Some(proxy) = proxy_url {
+                info!("直连失败，尝试使用代理: {}", proxy);
+                client.get(proxy).send().await.map_err(|e| format!("代理也无法访问: {}", e))
+            } else {
+                Err("直连失败且未配置代理".into())
+            }
+        }
+    }
+}
+
 // ============ Tauri Commands ============
 
 #[tauri::command]
@@ -21,20 +101,7 @@ pub async fn get_engine_status() -> Result<EngineStatus, String> {
     let path = get_engine_path();
     let exists = path.exists();
     let version = if exists {
-        let mut cmd = Command::new(&path);
-        cmd.arg("--version");
-
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(CREATE_NO_WINDOW);
-        }
-
-        let output = cmd
-            .output()
-            .ok()
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
-        output.filter(|v| !v.is_empty())
+        get_engine_version(&path)
     } else {
         None
     };
@@ -57,10 +124,6 @@ pub async fn download_engine(
             return Err("服务正在运行中，请先停止服务再更新引擎".into());
         }
     }
-    let client = reqwest::Client::builder()
-        .user_agent("miniserve-gui-downloader")
-        .build()
-        .map_err(|e| e.to_string())?;
 
     #[derive(Deserialize, Debug)]
     struct Release {
@@ -75,67 +138,38 @@ pub async fn download_engine(
         digest: Option<String>,
     }
 
-    let original_url = "https://api.github.com/repos/svenstaro/miniserve/releases/latest";
+    let client = build_http_client()?;
+    let api_url = "https://api.github.com/repos/svenstaro/miniserve/releases/latest";
     let proxy_prefix = get_proxy_prefix(&app_handle).unwrap_or_default();
-    // 校验代理 URL 格式：必须以 / 结尾或为空
     if !proxy_prefix.is_empty() && !proxy_prefix.ends_with('/') {
         return Err("代理 URL 必须以 / 结尾，例如 https://proxy.example.com/".into());
     }
-    let proxy_url = if proxy_prefix.is_empty() {
-        String::new()
-    } else {
-        format!("{}{}", proxy_prefix, original_url)
-    };
+    let proxy_api_url = apply_proxy(&proxy_prefix, api_url);
 
-    let response = match client.get(original_url).send().await {
-        Ok(resp) if resp.status().is_success() => resp,
-        _ if !proxy_url.is_empty() => {
-            info!("直连失败，尝试使用代理: {}", proxy_url);
-            client.get(&proxy_url).send().await.map_err(|e| format!("代理也无法访问: {}", e))?
-        }
-        _ => {
-            return Err("直连失败且未配置代理".into());
-        }
-    };
-
+    // Fetch latest release
+    let response = fetch_with_proxy(&client, api_url, proxy_api_url.as_deref()).await?;
     if !response.status().is_success() {
         let err_text = response.text().await.unwrap_or_default();
         #[derive(Deserialize, Debug)]
-        struct GithubError {
-            message: String,
-        }
-        let msg = if let Ok(gh_err) = serde_json::from_str::<GithubError>(&err_text) {
-            gh_err.message
-        } else {
-            err_text
-        };
+        struct GithubError { message: String }
+        let msg = serde_json::from_str::<GithubError>(&err_text)
+            .map(|e| e.message)
+            .unwrap_or(err_text);
         return Err(format!("获取版本失败: {}", msg));
     }
 
-    let release: Release = response
-        .json()
-        .await
-        .map_err(|e| e.to_string())?;
+    let release: Release = response.json().await.map_err(|e| e.to_string())?;
 
+    // Check if already up to date
     let dest_path = get_engine_path();
-    if dest_path.exists() {
-        let mut cmd = Command::new(&dest_path);
-        cmd.arg("--version");
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(CREATE_NO_WINDOW);
-        }
-        if let Ok(output) = cmd.output() {
-            let version_str = String::from_utf8_lossy(&output.stdout);
-            let current_ver = version_str.trim().replace("miniserve ", "");
-            let latest_ver = release.tag_name.trim_start_matches('v');
-            if current_ver == latest_ver {
-                return Ok(format!("已是最新版本 (v{})", latest_ver));
-            }
+    if let Some(current_ver) = dest_path.exists().then(|| get_engine_version(&dest_path)).flatten() {
+        let latest_ver = release.tag_name.trim_start_matches('v');
+        if current_ver == latest_ver {
+            return Ok(format!("已是最新版本 (v{})", latest_ver));
         }
     }
 
+    // Find matching asset
     let target_os = std::env::consts::OS;
     let pattern = match target_os {
         "windows" => "x86_64-pc-windows-msvc",
@@ -156,32 +190,15 @@ pub async fn download_engine(
         .find(|a| a.name.contains(pattern))
         .ok_or("No matching binary found")?;
 
-    let download_url = &asset.browser_download_url;
-    let proxy_download_url = if proxy_prefix.is_empty() {
-        String::new()
-    } else {
-        format!("{}{}", proxy_prefix, download_url)
-    };
-
-    let response = match client.get(download_url).send().await {
-        Ok(resp) if resp.status().is_success() => resp,
-        _ if !proxy_download_url.is_empty() => {
-            info!("直连下载失败，尝试使用代理: {}", proxy_download_url);
-            client.get(&proxy_download_url).send().await.map_err(|e| format!("代理下载失败: {}", e))?
-        }
-        _ => {
-            return Err("直连下载失败且未配置代理".into());
-        }
-    };
+    // Download binary with proxy fallback
+    let proxy_download_url = apply_proxy(&proxy_prefix, &asset.browser_download_url);
+    let response = fetch_with_proxy(&client, &asset.browser_download_url, proxy_download_url.as_deref()).await?;
 
     let total_size = response.content_length().unwrap_or(0);
-
     let bin_dir = get_engine_path().parent().unwrap().to_path_buf();
     fs::create_dir_all(&bin_dir).map_err(|e| e.to_string())?;
 
     let tmp_path = bin_dir.join("miniserve.tmp");
-    let dest_path = get_engine_path();
-
     let mut file = File::create(&tmp_path).map_err(|e| e.to_string())?;
     let mut downloaded: u64 = 0;
 
@@ -197,25 +214,12 @@ pub async fn download_engine(
         };
         let _ = app_handle.emit("download-progress", pct);
     }
-
     drop(file);
 
-    // SHA256 校验：使用 GitHub API 返回的 asset digest 字段
+    // Streaming SHA256 verification
     if let Some(ref digest) = asset.digest {
-        // digest 格式为 "sha256:<hex>"
         if let Some(expected_hex) = digest.strip_prefix("sha256:") {
-            use sha2::{Sha256, Digest};
-            let downloaded_bytes = fs::read(&tmp_path).map_err(|e| e.to_string())?;
-            let actual_hash = format!("{:x}", Sha256::digest(&downloaded_bytes));
-            let expected_hash = expected_hex.to_lowercase();
-            if actual_hash != expected_hash {
-                let _ = fs::remove_file(&tmp_path);
-                return Err(format!(
-                    "SHA256 校验失败，文件可能已被篡改\n期望: {}\n实际: {}",
-                    expected_hash, actual_hash
-                ));
-            }
-            info!("SHA256 校验通过: {}", actual_hash);
+            verify_sha256(&tmp_path, expected_hex)?;
         }
     } else {
         info!("GitHub API 未返回 digest 字段，跳过 SHA256 校验");
@@ -231,17 +235,8 @@ pub async fn download_engine(
         fs::set_permissions(&dest_path, perms).map_err(|e| e.to_string())?;
     }
 
-    info!(
-        "Engine downloaded to {} (tag: {})",
-        dest_path.display(),
-        release.tag_name
-    );
-
-    Ok(format!(
-        "{} (v{})",
-        dest_path.to_string_lossy(),
-        release.tag_name
-    ))
+    info!("Engine downloaded to {} (tag: {})", dest_path.display(), release.tag_name);
+    Ok(format!("{} (v{})", dest_path.to_string_lossy(), release.tag_name))
 }
 
 #[tauri::command]
@@ -275,22 +270,8 @@ pub async fn start_server(
     // 验证配置
     validate_config(&config)?;
 
-    // Kill existing and clean up job object
-    {
-        let mut child_guard = state.child.lock().map_err(|e| e.to_string())?;
-        if let Some(mut c) = child_guard.take() {
-            let _ = c.kill();
-            let _ = c.wait();
-        }
-    }
-    #[cfg(windows)]
-    {
-        if let Ok(mut job_guard) = state.job_handle.lock() {
-            if let Some(job) = job_guard.take() {
-                crate::job_object::close_job(job);
-            }
-        }
-    }
+    // Kill existing process and clean up job object
+    state.kill_child()?;
 
     let engine_path = get_engine_path();
     if !engine_path.exists() {
@@ -329,7 +310,6 @@ pub async fn start_server(
     }
 
     // Read stdout and stderr output
-    use std::io::{BufRead, BufReader};
     let stdout = child.stdout.take().map(|s| BufReader::new(s));
     let stderr = child.stderr.take().map(|s| BufReader::new(s));
 
@@ -446,22 +426,10 @@ pub async fn start_server(
 
 #[tauri::command]
 pub async fn stop_server(state: State<'_, AppState>, app_handle: AppHandle) -> Result<(), String> {
-    let mut child_guard = state.child.lock().map_err(|e| e.to_string())?;
-    if let Some(mut c) = child_guard.take() {
-        let _ = c.kill();
-        let _ = c.wait();
-    }
+    state.kill_child()?;
     {
         let mut url_guard = state.server_url.lock().map_err(|e| e.to_string())?;
         *url_guard = None;
-    }
-    #[cfg(windows)]
-    {
-        if let Ok(mut job_guard) = state.job_handle.lock() {
-            if let Some(job) = job_guard.take() {
-                crate::job_object::close_job(job);
-            }
-        }
     }
     let _ = app_handle.emit("server-stopped", ());
     Ok(())
@@ -596,14 +564,11 @@ pub async fn download_and_install_update(
     }
 
     info!("开始下载更新 v{}: {}", version, url);
-    let client = reqwest::Client::builder()
-        .user_agent("miniserve-gui-updater")
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = build_http_client()?;
 
     let proxy_prefix = get_proxy_prefix(&app_handle).unwrap_or_default();
     let download_url = if !proxy_prefix.is_empty() && url.contains("github.com") {
-        format!("{}{}", proxy_prefix, url)
+        apply_proxy(&proxy_prefix, &url).unwrap_or(url.clone())
     } else {
         url.clone()
     };

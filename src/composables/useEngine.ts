@@ -1,0 +1,40 @@
+import { ref } from "vue";
+import { invoke } from "@tauri-apps/api/core";
+import { ElMessage } from "element-plus";
+import { useI18n } from "vue-i18n";
+import type { EngineStatus } from "../types";
+
+export function useEngine() {
+  const { t } = useI18n();
+  const engineStatus = ref<EngineStatus | null>(null);
+  const downloading = ref(false);
+  const progress = ref(0);
+
+  async function checkEngine() {
+    try {
+      engineStatus.value = await invoke<EngineStatus>("get_engine_status");
+      if (engineStatus.value && !engineStatus.value.exists) {
+        ElMessage.info(t("messages.engineNotInstalledInfo"));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function downloadEngine() {
+    downloading.value = true;
+    progress.value = 0;
+    ElMessage.info(t("messages.startDownloadEngine"));
+    try {
+      const result = await invoke<string>("download_engine");
+      downloading.value = false;
+      ElMessage.success(t("messages.downloadEngineSuccess", { result }));
+      await checkEngine();
+    } catch (e) {
+      downloading.value = false;
+      ElMessage.error(t("messages.downloadEngineFailed", { error: e }));
+    }
+  }
+
+  return { engineStatus, downloading, progress, checkEngine, downloadEngine };
+}
