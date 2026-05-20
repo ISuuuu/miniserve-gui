@@ -125,6 +125,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   configModule.cleanup();
+  copyTimers.forEach((timer) => clearTimeout(timer));
+  copyTimers.clear();
   unlistenFns.forEach((fn) => fn());
   unlistenFns.length = 0;
 });
