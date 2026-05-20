@@ -35,8 +35,6 @@
 | | ` -u -U` | 允许创建目录 |
 | 界面展示 | `--color-scheme` | 配色主题（squirrel, archlinux, zenburn, monokai）|
 | | `--title` | 网页标题 |
-| | `--media-controls` | 音视频媒体播放控件 |
-| | `--thumbnails` | 图片/视频缩略图预览 |
 | 高级进阶 | `-H, --hidden` | 显示点开头的文件 |
 | | `--random-route ` | 随机路径 |
 | | `--readme ` | 自动渲染 README |

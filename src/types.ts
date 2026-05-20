@@ -6,12 +6,10 @@ export interface ServerConfig {
   auth_password: string;
   upload: boolean;
   mkdir: boolean;
-  media_controls: boolean;
   color_scheme: string;
   title: string;
   compress: string;
   hidden: boolean;
-  thumbnails: boolean;
   random_route: boolean;
   readme: boolean;
   download: boolean;

@@ -203,7 +203,11 @@ onUnmounted(() => {
         <el-tag type="info" size="small" style="margin-bottom: 15px;">{{ t('about.version', { version: appVersion || t('about.unknownVersion') }) }}</el-tag>
         <p style="font-size: 13px; color: #606266; line-height: 1.6;">
           {{ t('app.description') }}<br/>
-          {{ t('app.basedOn', { link: '' }) }}<a href="#" @click.prevent="openUrl('https://github.com/svenstaro/miniserve')" style="color: #409EFF; text-decoration: none;">svenstaro/miniserve</a>
+          <i18n-t keypath="app.basedOn" tag="span">
+            <template #link>
+              <a href="#" @click.prevent="openUrl('https://github.com/svenstaro/miniserve')" style="color: #409EFF; text-decoration: none;">svenstaro/miniserve</a>
+            </template>
+          </i18n-t>
         </p>
       </div>
       <template #footer>
@@ -341,7 +345,7 @@ html, body {
   flex-direction: column;
   gap: 12px;
   padding: 12px 16px;
-  overflow-y: auto;
+  overflow: hidden;
   min-height: 0;
 }
 

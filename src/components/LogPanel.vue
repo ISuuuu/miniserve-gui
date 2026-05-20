@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Files } from "@element-plus/icons-vue";
-import { ref, watch, nextTick } from "vue";
+import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 const props = defineProps<{
@@ -14,12 +14,11 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const logBoxRef = ref<HTMLElement | null>(null);
 
-watch(() => props.logs.length, async () => {
-  await nextTick();
+watch(() => props.logs.length, () => {
   if (logBoxRef.value) {
     logBoxRef.value.scrollTop = logBoxRef.value.scrollHeight;
   }
-});
+}, { flush: 'post' });
 
 function clearLogs() {
   emit("clearLogs");
@@ -52,6 +51,11 @@ function clearLogs() {
 
 .log-card :deep(.el-card__body) {
   padding: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .card-header {
@@ -71,6 +75,7 @@ function clearLogs() {
   line-height: 1.8;
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
 }
 
 .log-line {

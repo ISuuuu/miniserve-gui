@@ -1,4 +1,3 @@
-use log::info;
 use tauri::{
     AppHandle, Manager,
     menu::{Menu, MenuItem},
@@ -146,7 +145,7 @@ pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     
     #[cfg(debug_assertions)]
-    info!("miniserve-gui starting...");
+    log::info!("miniserve-gui starting...");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {

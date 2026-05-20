@@ -17,7 +17,7 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 // ============ Shared Helpers ============
 
-/// Run `miniserve --version` and return the version string (e.g. "0.27.0").
+/// Run `miniserve --version` and return the raw version string (e.g. "miniserve 0.27.0").
 fn get_engine_version(path: &std::path::Path) -> Option<String> {
     let mut cmd = Command::new(path);
     cmd.arg("--version");
@@ -30,7 +30,6 @@ fn get_engine_version(path: &std::path::Path) -> Option<String> {
         .ok()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .filter(|v| !v.is_empty())
-        .map(|v| v.replace("miniserve ", ""))
 }
 
 /// Prepend proxy prefix to a URL. Returns None if proxy is empty.
@@ -163,8 +162,9 @@ pub async fn download_engine(
     // Check if already up to date
     let dest_path = get_engine_path();
     if let Some(current_ver) = dest_path.exists().then(|| get_engine_version(&dest_path)).flatten() {
+        let current_num = current_ver.replace("miniserve ", "");
         let latest_ver = release.tag_name.trim_start_matches('v');
-        if current_ver == latest_ver {
+        if current_num == latest_ver {
             return Ok(format!("已是最新版本 (v{})", latest_ver));
         }
     }

@@ -32,8 +32,6 @@ const featureDescriptions: Record<string, string> = {
   download: t('features.download'),
   readme: t('features.readme'),
   hidden: t('features.hidden'),
-  media_controls: t('features.mediaControls'),
-  thumbnails: t('features.thumbnails'),
 };
 
 const hoveredFeature = defineModel<string>("hoveredFeature", { default: "" });
@@ -107,8 +105,6 @@ const hoveredFeature = defineModel<string>("hoveredFeature", { default: "" });
         <TogglePill v-model="config.download" :label="t('config.download')" feature-key="download" @hover="hoveredFeature = $event" />
         <TogglePill v-model="config.readme" :label="t('config.readme')" feature-key="readme" @hover="hoveredFeature = $event" />
         <TogglePill v-model="config.hidden" :label="t('config.hidden')" feature-key="hidden" @hover="hoveredFeature = $event" />
-        <TogglePill v-model="config.media_controls" :label="t('config.mediaControls')" feature-key="media_controls" @hover="hoveredFeature = $event" />
-        <TogglePill v-model="config.thumbnails" :label="t('config.thumbnails')" feature-key="thumbnails" @hover="hoveredFeature = $event" />
       </div>
     </el-form>
 

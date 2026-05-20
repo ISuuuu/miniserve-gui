@@ -47,8 +47,6 @@ export default {
     download: '打包下载',
     readme: 'README',
     hidden: '显示点文件',
-    mediaControls: '媒体控制',
-    thumbnails: '缩略图',
   },
   features: {
     randomRoute: '为服务器路径添加随机后缀，防止被他人扫描访问',
@@ -56,8 +54,6 @@ export default {
     download: '允许访客将目录打包为 ZIP 文件下载',
     readme: '自动识别并渲染目录中的 README 文件作为首页',
     hidden: '显示以 . 开头的隐藏文件和文件夹',
-    mediaControls: '为音频和视频文件启用浏览器原生媒体播放控件',
-    thumbnails: '为图片和视频文件生成缩略图预览',
   },
   colorSchemes: {
     squirrel: '🐿️ 松鼠 (squirrel)',

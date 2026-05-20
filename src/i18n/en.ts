@@ -47,8 +47,6 @@ export default {
     download: 'Download',
     readme: 'README',
     hidden: 'Show Hidden',
-    mediaControls: 'Media Controls',
-    thumbnails: 'Thumbnails',
   },
   features: {
     randomRoute: 'Add random suffix to server path to prevent scanning',
@@ -56,8 +54,6 @@ export default {
     download: 'Allow visitors to download directory as ZIP',
     readme: 'Auto-detect and render README files as homepage',
     hidden: 'Show files and folders starting with .',
-    mediaControls: 'Enable native browser media playback controls for audio and video files',
-    thumbnails: 'Generate thumbnail previews for images and videos',
   },
   colorSchemes: {
     squirrel: '🐿️ Squirrel',

@@ -148,9 +148,6 @@ pub fn build_miniserve_args(cfg: &ServerConfig) -> Result<Vec<String>, String> {
     if cfg.mkdir {
         args.push("-U".into());
     }
-    if cfg.media_controls {
-        args.push("--media-controls".into());
-    }
     if VALID_COLOR_SCHEMES.contains(&cfg.color_scheme.as_str()) {
         args.push("--color-scheme".into());
         args.push(cfg.color_scheme.clone());
@@ -161,9 +158,6 @@ pub fn build_miniserve_args(cfg: &ServerConfig) -> Result<Vec<String>, String> {
     }
     if cfg.hidden {
         args.push("-H".into());
-    }
-    if cfg.thumbnails {
-        args.push("--thumbnails".into());
     }
     if cfg.random_route {
         args.push("--random-route".into());
