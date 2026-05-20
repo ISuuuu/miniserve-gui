@@ -602,13 +602,14 @@ pub async fn download_and_install_update(
             .and_then(|p| p.parent().map(|p| p.to_path_buf()));
 
         let mut cmd = Command::new(&temp_path);
-        cmd.arg("/S");
+        cmd.arg("/S").arg("/R");
         if let Some(dir) = install_dir {
             cmd.arg(format!("/D={}", dir.display()));
         }
 
-        let status = cmd.spawn().map_err(|e| format!("启动安装程序失败: {}", e))?;
-        info!("安装程序已启动: {:?}", status);
+        cmd.spawn().map_err(|e| format!("启动安装程序失败: {}", e))?;
+        info!("安装程序已启动，正在退出当前进程以释放文件锁");
+        app_handle.exit(0);
     }
 
     #[cfg(target_os = "linux")]

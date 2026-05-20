@@ -184,6 +184,37 @@ export function useUpdater(
         );
 
         if (latestVersion && latestVersion !== currentVersion) {
+          const packageType = await invoke<string>("get_package_type");
+          if (packageType === "deb" || packageType === "portable") {
+            logs.addLog(
+              t("update.debOrPortableNotSupported", {
+                version: latestVersion,
+                packageType,
+              }),
+            );
+            ElMessageBox.confirm(
+              t("update.debOrPortableNotSupported", {
+                version: latestVersion,
+                packageType:
+                  packageType === "deb"
+                    ? "DEB安装版"
+                    : "Windows便携版",
+              }),
+              "发现更新",
+              {
+                confirmButtonText: t("update.goToDownload"),
+                cancelButtonText: t("update.later"),
+                type: "info",
+              },
+            )
+              .then(() => {
+                const releaseUrl = t("update.releasePage");
+                openUrl(releaseUrl);
+              })
+              .catch(() => {});
+            return;
+          }
+
           logs.addLog(
             t("update.newVersion", {
               version: latestVersion,
@@ -205,10 +236,6 @@ export function useUpdater(
             signature: platformInfo.signature,
             version: latestVersion,
           });
-          const { relaunch } = await import(
-            "@tauri-apps/plugin-process"
-          );
-          await relaunch();
           return;
         }
         update = null;
