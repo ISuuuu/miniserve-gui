@@ -27,5 +27,6 @@ declare module 'vue' {
     ElTag: typeof import('element-plus/es')['ElTag']
     LogPanel: typeof import('./src/components/LogPanel.vue')['default']
     StatusCard: typeof import('./src/components/StatusCard.vue')['default']
+    TogglePill: typeof import('./src/components/TogglePill.vue')['default']
   }
 }
