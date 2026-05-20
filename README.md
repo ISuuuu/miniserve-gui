@@ -7,7 +7,7 @@
 ## 功能特性
 
 - ✅ **引擎自动管理** - 自动检测/下载最新版本的 miniserve 二进制文件
-- ✅ **可视化配置** - 支持部分 miniserve CLI 参数的图形化配置
+- ✅ **可视化配置** - 支持大部分 miniserve CLI 参数的图形化配置
 - ✅ **服务控制** - 一键启动/停止服务，实时显示服务状态
 - ✅ **二维码分享** - 生成二维码，移动端扫码即访问
 - ✅ **配置持久化** - 保存配置到本地，重启后自动加载
@@ -33,17 +33,19 @@
 | 安全控制 | `-a, --auth` | 用户名:密码 认证 |
 | | `-u, --upload` | 允许访客上传文件 |
 | | ` -u -U` | 允许创建目录 |
-| 界面展示 | `--color-scheme` | 配色主题（squirrel", "archlinux", "zenburn", "monokai）|
+| 界面展示 | `--color-scheme` | 配色主题（squirrel, archlinux, zenburn, monokai）|
 | | `--title` | 网页标题 |
+| | `--media-controls` | 音视频媒体播放控件 |
+| | `--thumbnails` | 图片/视频缩略图预览 |
 | 高级进阶 | `-H, --hidden` | 显示点开头的文件 |
 | | `--random-route ` | 随机路径 |
 | | `--readme ` | 自动渲染 README |
-| | `--z ` | 一键打包下载 |
+| | `-z` | 一键打包下载 |
 | | `--enable-webdav` | 启用 WebDAV 支持 |
 
 ## 技术栈
 
-- **前端**: Vue 3 + TypeScript + Vite + Element Plus + vue-i18n
+- **前端**: Vue 3 (Composition API) + TypeScript + Vite + Element Plus（按需加载） + vue-i18n
 - **后端**: Tauri 2 (Rust)
 - **引擎**: [miniserve](https://github.com/svenstaro/miniserve)
 
@@ -51,10 +53,18 @@
 
 ```
 ├── src/                        # 前端源码
-│   ├── App.vue                # 主组件（业务逻辑）
+│   ├── App.vue                # 主组件（编排 composables）
 │   ├── main.ts                # Vue 入口
+│   ├── composables/
+│   │   ├── useEngine.ts       # 引擎管理（检查/下载）
+│   │   ├── useConfig.ts       # 配置加载/保存/自动保存
+│   │   ├── useServer.ts       # 服务启停/状态管理
+│   │   ├── useLogs.ts         # 日志管理
+│   │   ├── useQr.ts           # 二维码生成
+│   │   └── useUpdater.ts      # 自动更新
 │   ├── components/
-│   │   ├── ConfigPanel.vue    # 配置面板组件
+│   │   ├── ConfigPanel.vue    # 配置面板
+│   │   ├── TogglePill.vue     # 通用开关按钮
 │   │   ├── StatusCard.vue     # 服务状态卡片
 │   │   └── LogPanel.vue       # 运行日志面板
 │   └── i18n/
@@ -63,7 +73,7 @@
 │       └── en.ts              # 英文语言包
 ├── src-tauri/                  # Rust 后端
 │   ├── src/
-│   │   ├── lib.rs             # 模块声明、托盘、入口
+│   │   ├── lib.rs             # 模块声明、Job Object、托盘、入口
 │   │   ├── main.rs            # 程序入口
 │   │   ├── commands.rs        # Tauri commands
 │   │   ├── state.rs           # 状态和类型定义
