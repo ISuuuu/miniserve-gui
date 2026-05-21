@@ -5,9 +5,41 @@ use crate::state::ServerConfig;
 
 pub const VALID_COLOR_SCHEMES: &[&str] = &["squirrel", "archlinux", "zenburn", "monokai"];
 
+/// 检测是否为便携版（仅 Windows，只检测卸载程序）
+pub fn is_portable() -> bool {
+    // 非 Windows 不支持便携版
+    if env::consts::OS != "windows" {
+        return false;
+    }
+
+    let exe_dir = env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_default();
+
+    // 有卸载程序则为安装版
+    !exe_dir.join("Uninstall miniserve-gui.exe").exists()
+        && !exe_dir.join("uninstall.exe").exists()
+        && !exe_dir.join("unins000.exe").exists()
+}
+
+/// 便携版数据目录（exe 同级 data/）
+fn portable_data_dir() -> PathBuf {
+    env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.join("data")))
+        .unwrap_or_else(|| PathBuf::from("data"))
+}
+
 pub fn get_engine_path() -> PathBuf {
-    let base = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("."));
-    let bin_dir = base.join("miniserve-gui").join("bin");
+    let bin_dir = if is_portable() {
+        portable_data_dir().join("bin")
+    } else {
+        dirs::data_local_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("miniserve-gui")
+            .join("bin")
+    };
     if env::consts::OS == "windows" {
         bin_dir.join("miniserve.exe")
     } else {
@@ -16,8 +48,15 @@ pub fn get_engine_path() -> PathBuf {
 }
 
 pub fn get_config_path() -> PathBuf {
-    let base = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
-    base.join("miniserve-gui").join("config.json")
+    if is_portable() {
+        portable_data_dir().join("config.json")
+    } else {
+        // 安装版使用系统配置目录（Windows: %APPDATA%, Linux: ~/.config）
+        dirs::config_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("miniserve-gui")
+            .join("config.json")
+    }
 }
 
 pub fn validate_config(cfg: &ServerConfig) -> Result<(), String> {

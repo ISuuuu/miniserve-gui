@@ -708,25 +708,10 @@ pub fn get_package_type() -> String {
 
     #[cfg(target_os = "windows")]
     {
-        // 改进 Windows 检测逻辑：检查可执行文件同级目录是否存在 Uninstall 卸载程序
-        // NSIS 打包默认会生成类似 "Uninstall miniserve-gui.exe" 的文件
-        let is_installer = std::env::current_exe()
-            .map(|p| {
-                if let Some(dir) = p.parent() {
-                    dir.join("Uninstall miniserve-gui.exe").exists()
-                    || dir.join("unins000.exe").exists()
-                    || dir.to_string_lossy().to_lowercase().contains("program files")
-                    || dir.to_string_lossy().to_lowercase().contains("appdata\\local\\programs")
-                } else {
-                    false
-                }
-            })
-            .unwrap_or(false);
-
-        if is_installer {
-            return "installer".to_string();
+        if crate::utils::is_portable() {
+            return "portable".to_string();
         }
-        return "portable".to_string();
+        return "installer".to_string();
     }
 
     #[cfg(not(any(target_os = "linux", target_os = "windows")))]
