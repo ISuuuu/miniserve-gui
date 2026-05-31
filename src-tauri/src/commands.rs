@@ -216,14 +216,12 @@ pub async fn download_engine(
     }
     drop(file);
 
-    // Streaming SHA256 verification
-    if let Some(ref digest) = asset.digest {
-        if let Some(expected_hex) = digest.strip_prefix("sha256:") {
-            verify_sha256(&tmp_path, expected_hex)?;
-        }
-    } else {
-        info!("GitHub API 未返回 digest 字段，跳过 SHA256 校验");
-    }
+    // Streaming SHA256 verification — 必须校验，不跳过
+    let digest = asset.digest.as_deref()
+        .ok_or("GitHub API 未返回 digest 字段，无法校验文件完整性，请检查网络或稍后重试")?;
+    let expected_hex = digest.strip_prefix("sha256:")
+        .ok_or(format!("不支持的 digest 格式: {}", digest))?;
+    verify_sha256(&tmp_path, expected_hex)?;
 
     fs::rename(&tmp_path, &dest_path).map_err(|e| e.to_string())?;
 
