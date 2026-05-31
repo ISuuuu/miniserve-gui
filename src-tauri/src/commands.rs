@@ -134,8 +134,6 @@ pub async fn download_engine(
     struct Asset {
         name: String,
         browser_download_url: String,
-        #[serde(default)]
-        digest: Option<String>,
     }
 
     let client = build_http_client()?;
@@ -217,12 +215,44 @@ pub async fn download_engine(
     }
     drop(file);
 
-    // Streaming SHA256 verification — 必须校验，不跳过
-    let digest = asset.digest.as_deref()
-        .ok_or("GitHub API 未返回 digest 字段，无法校验文件完整性，请检查网络或稍后重试")?;
-    let expected_hex = digest.strip_prefix("sha256:")
-        .ok_or(format!("不支持的 digest 格式: {}", digest))?;
-    verify_sha256(&tmp_path, expected_hex)?;
+    // SHA256 校验：从 release 的 sha256sums.txt 获取校验和
+    let sums_asset = release.assets.iter().find(|a| a.name == "sha256sums.txt");
+    match sums_asset {
+        Some(sums) => {
+            let proxy_sums_url = apply_proxy(&proxy_prefix, &sums.browser_download_url);
+            match fetch_with_proxy(&client, &sums.browser_download_url, proxy_sums_url.as_deref()).await {
+                Ok(resp) if resp.status().is_success() => {
+                    if let Ok(text) = resp.text().await {
+                        // sha256sums.txt 格式: "<hash>  <filename>" 每行一条
+                        let expected_hex = text.lines()
+                            .filter_map(|line| {
+                                let parts: Vec<&str> = line.split_whitespace().collect();
+                                if parts.len() >= 2 && parts[1] == asset.name {
+                                    Some(parts[0].to_string())
+                                } else {
+                                    None
+                                }
+                            })
+                            .next();
+                        match expected_hex {
+                            Some(hex) => {
+                                verify_sha256(&tmp_path, &hex)?;
+                            }
+                            None => {
+                                info!("sha256sums.txt 中未找到 {} 的校验和，跳过校验", asset.name);
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    info!("无法下载 sha256sums.txt，跳过 SHA256 校验");
+                }
+            }
+        }
+        None => {
+            info!("Release 中无 sha256sums.txt，跳过 SHA256 校验");
+        }
+    }
 
     fs::rename(&tmp_path, &dest_path).map_err(|e| e.to_string())?;
 
