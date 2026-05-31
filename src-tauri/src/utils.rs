@@ -90,6 +90,20 @@ pub fn validate_config(cfg: &ServerConfig) -> Result<(), String> {
         return Err(format!("无效的配色方案: {}", cfg.color_scheme));
     }
 
+    // 验证网络接口
+    let valid_interfaces = ["::", "0.0.0.0", "127.0.0.1", "::1", "localhost"];
+    if !valid_interfaces.contains(&cfg.interfaces.as_str()) {
+        // 尝试解析为合法 IP 地址
+        if cfg.interfaces.parse::<std::net::IpAddr>().is_err() {
+            return Err(format!("无效的网络接口: {}（允许: 0.0.0.0, ::, 127.0.0.1 或合法 IP 地址）", cfg.interfaces));
+        }
+    }
+
+    // 验证标题不含 HTML 特殊字符
+    if cfg.title.contains('<') || cfg.title.contains('>') || cfg.title.contains('&') {
+        return Err("网页标题不能包含 HTML 特殊字符 (< > &)" .into());
+    }
+
     // 验证 mkdir 依赖 upload
     if cfg.mkdir && !cfg.upload {
         return Err("创建目录功能需要先开启上传功能".into());
