@@ -619,14 +619,18 @@ pub async fn download_and_install_update(
 
     let bytes = response.bytes().await.map_err(|e| e.to_string())?;
 
-    let temp_dir = std::env::temp_dir();
-    // 使用 Path::file_name() 提取文件名，防止路径穿越（如 ../../evil.exe）
-    let file_name = std::path::Path::new(url.split('/').last().unwrap_or("update.exe"))
-        .file_name()
-        .unwrap_or(std::ffi::OsStr::new("update.exe"));
-    let temp_path = temp_dir.join(file_name);
-
-    fs::write(&temp_path, &bytes).map_err(|e| e.to_string())?;
+    // 使用随机临时文件名，防止符号链接攻击
+    let ext = std::path::Path::new(url.split('/').last().unwrap_or("update"))
+        .extension()
+        .unwrap_or(std::ffi::OsStr::new("exe"));
+    let mut temp_file = tempfile::Builder::new()
+        .prefix("miniserve-update-")
+        .suffix(&format!(".{}", ext.to_string_lossy()))
+        .tempfile_in(std::env::temp_dir())
+        .map_err(|e| format!("创建临时文件失败: {}", e))?;
+    use std::io::Write;
+    temp_file.write_all(&bytes).map_err(|e| e.to_string())?;
+    let temp_path = temp_file.into_temp_path();
     info!("更新已下载到: {:?}", temp_path);
 
     #[cfg(windows)]
