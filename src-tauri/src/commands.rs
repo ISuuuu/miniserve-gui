@@ -7,7 +7,6 @@ use std::thread;
 use futures_util::StreamExt;
 use log::info;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, State};
 
 use crate::state::{AppState, EngineStatus, QrCodeResponse, ServerConfig, ServerStatus};
@@ -40,31 +39,6 @@ fn apply_proxy(proxy_prefix: &str, url: &str) -> Option<String> {
     } else {
         Some(format!("{}{}", proxy_prefix, url))
     }
-}
-
-/// Streaming SHA256 verification — reads file in 8KB chunks.
-fn verify_sha256(path: &std::path::Path, expected_hex: &str) -> Result<(), String> {
-    let mut file = File::open(path).map_err(|e| e.to_string())?;
-    let mut hasher = Sha256::new();
-    let mut buf = [0u8; 8192];
-    loop {
-        let n = std::io::Read::read(&mut file, &mut buf).map_err(|e| e.to_string())?;
-        if n == 0 {
-            break;
-        }
-        hasher.update(&buf[..n]);
-    }
-    let actual = format!("{:x}", hasher.finalize());
-    let expected = expected_hex.to_lowercase();
-    if actual != expected {
-        let _ = fs::remove_file(path);
-        return Err(format!(
-            "SHA256 校验失败，文件可能已被篡改\n期望: {}\n实际: {}",
-            expected, actual
-        ));
-    }
-    info!("SHA256 校验通过: {}", actual);
-    Ok(())
 }
 
 /// Build a reqwest::Client with proxy support.
@@ -214,45 +188,6 @@ pub async fn download_engine(
         let _ = app_handle.emit("download-progress", pct);
     }
     drop(file);
-
-    // SHA256 校验：从 release 的 sha256sums.txt 获取校验和
-    let sums_asset = release.assets.iter().find(|a| a.name == "sha256sums.txt");
-    match sums_asset {
-        Some(sums) => {
-            let proxy_sums_url = apply_proxy(&proxy_prefix, &sums.browser_download_url);
-            match fetch_with_proxy(&client, &sums.browser_download_url, proxy_sums_url.as_deref()).await {
-                Ok(resp) if resp.status().is_success() => {
-                    if let Ok(text) = resp.text().await {
-                        // sha256sums.txt 格式: "<hash>  <filename>" 每行一条
-                        let expected_hex = text.lines()
-                            .filter_map(|line| {
-                                let parts: Vec<&str> = line.split_whitespace().collect();
-                                if parts.len() >= 2 && parts[1] == asset.name {
-                                    Some(parts[0].to_string())
-                                } else {
-                                    None
-                                }
-                            })
-                            .next();
-                        match expected_hex {
-                            Some(hex) => {
-                                verify_sha256(&tmp_path, &hex)?;
-                            }
-                            None => {
-                                info!("sha256sums.txt 中未找到 {} 的校验和，跳过校验", asset.name);
-                            }
-                        }
-                    }
-                }
-                _ => {
-                    info!("无法下载 sha256sums.txt，跳过 SHA256 校验");
-                }
-            }
-        }
-        None => {
-            info!("Release 中无 sha256sums.txt，跳过 SHA256 校验");
-        }
-    }
 
     fs::rename(&tmp_path, &dest_path).map_err(|e| e.to_string())?;
 
