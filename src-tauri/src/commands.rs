@@ -622,7 +622,10 @@ pub async fn download_and_install_update(
     let bytes = response.bytes().await.map_err(|e| e.to_string())?;
 
     let temp_dir = std::env::temp_dir();
-    let file_name = url.split('/').last().unwrap_or("update.exe");
+    // 使用 Path::file_name() 提取文件名，防止路径穿越（如 ../../evil.exe）
+    let file_name = std::path::Path::new(url.split('/').last().unwrap_or("update.exe"))
+        .file_name()
+        .unwrap_or(std::ffi::OsStr::new("update.exe"));
     let temp_path = temp_dir.join(file_name);
 
     fs::write(&temp_path, &bytes).map_err(|e| e.to_string())?;
@@ -676,11 +679,15 @@ pub async fn download_and_install_update(
 
             let target_path_buf = std::path::PathBuf::from(&target_path);
             let target_dir = target_path_buf.parent().unwrap();
-            let final_name = url
+            // 使用 Path::file_name() 提取文件名，防止路径穿越
+            let raw_name = url
                 .split('/')
                 .last()
                 .filter(|name| name.ends_with(".AppImage"))
                 .ok_or("无法从更新 URL 获取 AppImage 文件名")?;
+            let final_name = std::path::Path::new(raw_name)
+                .file_name()
+                .ok_or("AppImage 文件名无效")?;
             let final_path = target_dir.join(final_name).to_string_lossy().to_string();
 
             let output = run_pkexec_appimage_replace(&target_path, &source_path, &final_path)?;
