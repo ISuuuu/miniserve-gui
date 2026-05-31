@@ -523,6 +523,28 @@ pub fn get_proxy_prefix(app_handle: &AppHandle) -> Option<String> {
     config.proxy
 }
 
+/// 获取更新器公钥（来自 tauri.conf.json plugins.updater.pubkey）
+fn get_updater_pubkey(app_handle: &AppHandle) -> Result<String, String> {
+    let plugins = &app_handle.config().plugins.0;
+    let updater_value = plugins.get("updater").ok_or("updater config not found")?;
+    updater_value
+        .get("pubkey")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .ok_or("updater pubkey not found in config".into())
+}
+
+/// 验证下载文件的 minisign 签名
+fn verify_signature(data: &[u8], signature_b64: &str, pubkey_b64: &str) -> Result<(), String> {
+    use minisign_verify::{PublicKey, Signature};
+    let public_key = PublicKey::decode(pubkey_b64)
+        .map_err(|e| format!("解析公钥失败: {}", e))?;
+    let signature = Signature::decode(signature_b64)
+        .map_err(|e| format!("解析签名失败: {}", e))?;
+    public_key.verify(data, &signature, false)
+        .map_err(|_| "签名验证失败：文件可能已被篡改".into())
+}
+
 /// 以 root 权限替换 AppImage。shell 片段是固定字符串，路径只通过 argv 传入，
 /// 避免拼接用户可控路径，也不在 /tmp 落可被替换的脚本文件。
 #[cfg(target_os = "linux")]
@@ -583,7 +605,7 @@ pub async fn fetch_update_manifest(
 pub async fn download_and_install_update(
     app_handle: AppHandle,
     url: String,
-    _signature: String,
+    signature: String,
     version: String,
 ) -> Result<(), String> {
     #[cfg(target_os = "linux")]
@@ -618,6 +640,21 @@ pub async fn download_and_install_update(
     }
 
     let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+
+    // 验证签名
+    if !signature.is_empty() {
+        match get_updater_pubkey(&app_handle) {
+            Ok(pubkey) => {
+                verify_signature(&bytes, &signature, &pubkey)?;
+                info!("签名验证通过");
+            }
+            Err(e) => {
+                return Err(format!("无法获取公钥进行签名验证: {}", e));
+            }
+        }
+    } else {
+        return Err("更新清单未提供签名，拒绝安装".into());
+    }
 
     // 使用随机临时文件名，防止符号链接攻击
     let ext = std::path::Path::new(url.split('/').last().unwrap_or("update"))
