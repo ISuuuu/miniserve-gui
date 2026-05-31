@@ -14,6 +14,7 @@ export interface ServerConfig {
   readme: boolean;
   download: boolean;
   webdav: boolean;
+  github_proxy: string;
 }
 
 export interface ServerStatus {

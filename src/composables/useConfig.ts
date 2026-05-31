@@ -19,6 +19,7 @@ export function useConfig() {
     readme: false,
     download: false,
     webdav: false,
+    github_proxy: "https://github.369900.xyz/",
   });
 
   async function loadConfig() {

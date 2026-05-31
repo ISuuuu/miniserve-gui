@@ -505,7 +505,20 @@ pub struct UpdaterPluginConfig {
     pub proxy: Option<String>,
 }
 
+/// Get the GitHub proxy prefix. User config takes priority over tauri.conf.json.
 pub fn get_proxy_prefix(app_handle: &AppHandle) -> Option<String> {
+    // 1. Try user config first
+    let config_path = get_config_path();
+    if config_path.exists() {
+        if let Ok(content) = fs::read_to_string(&config_path) {
+            if let Ok(config) = serde_json::from_str::<ServerConfig>(&content) {
+                if !config.github_proxy.is_empty() {
+                    return Some(config.github_proxy);
+                }
+            }
+        }
+    }
+    // 2. Fall back to tauri.conf.json updater plugin config
     let plugins = &app_handle.config().plugins.0;
     let updater_value = plugins.get("updater")?;
     let config: UpdaterPluginConfig = serde_json::from_value(updater_value.clone()).ok()?;
@@ -545,6 +558,27 @@ pub fn get_updater_config(app_handle: AppHandle) -> Result<UpdaterConfig, String
         endpoints: config.endpoints,
         proxy: config.proxy,
     })
+}
+
+/// Fetch update manifest with proxy fallback (moved from frontend to avoid CSP issues).
+#[tauri::command]
+pub async fn fetch_update_manifest(
+    app_handle: AppHandle,
+    url: String,
+) -> Result<serde_json::Value, String> {
+    let client = build_http_client()?;
+    let proxy_prefix = get_proxy_prefix(&app_handle).unwrap_or_default();
+    let proxy_url = if !proxy_prefix.is_empty() {
+        apply_proxy(&proxy_prefix, &url)
+    } else {
+        None
+    };
+
+    let response = fetch_with_proxy(&client, &url, proxy_url.as_deref()).await?;
+    if !response.status().is_success() {
+        return Err(format!("更新清单响应异常: {}", response.status()));
+    }
+    response.json().await.map_err(|e| format!("解析更新清单失败: {}", e))
 }
 
 #[tauri::command]

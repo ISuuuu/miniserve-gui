@@ -14,6 +14,11 @@ export default {
     updateEngine: '更新引擎',
     downloading: '下载中 {progress}%',
     about: '关于软件',
+    settings: '设置',
+  },
+  settings: {
+    title: '设置',
+    close: '关闭',
   },
   about: {
     title: '关于',
@@ -47,6 +52,9 @@ export default {
     download: '打包下载',
     readme: 'README',
     hidden: '显示点文件',
+    githubProxy: 'GitHub 下载代理',
+    githubProxyTooltip: '用于加速从 GitHub 下载 miniserve 引擎及软件版本更新，支持本地 HTTP/HTTPS 代理或在线镜像加速网关。',
+    githubProxyPlaceholder: '留空则直连，例如 https://proxy.example.com/',
   },
   features: {
     randomRoute: '为服务器路径添加随机后缀，防止被他人扫描访问',

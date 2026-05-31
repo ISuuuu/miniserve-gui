@@ -118,11 +118,12 @@ const hoveredFeature = defineModel<string>("hoveredFeature", { default: "" });
 .config-panel {
   width: 300px;
   min-width: 280px;
-  background: #fff;
+  background: var(--bg-card);
   padding: 10px 12px 36px;
   overflow-y: auto;
-  border-right: 1px solid #e4e7ed;
+  border-right: 1px solid var(--border-color);
   position: relative;
+  transition: all var(--transition-speed) ease;
 }
 
 .path-row {
@@ -135,22 +136,10 @@ const hoveredFeature = defineModel<string>("hoveredFeature", { default: "" });
   flex: 1;
 }
 
-.path-row .el-button {
-  background: #409EFF;
-  border-color: #409EFF;
-  transition: all 0.2s ease;
-}
-
-.path-row .el-button:hover {
-  background: #337ECC;
-  border-color: #337ECC;
-  transform: translateY(-1px);
-}
-
 .toggle-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
   margin: 4px 0 8px;
   padding-left: 80px;
@@ -170,10 +159,10 @@ const hoveredFeature = defineModel<string>("hoveredFeature", { default: "" });
   gap: 8px;
   font-size: 12px;
   font-weight: 600;
-  color: #409EFF;
+  color: var(--primary-color);
   margin: 12px 0 8px;
   padding-bottom: 6px;
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .section-title .el-icon {
@@ -185,6 +174,11 @@ const hoveredFeature = defineModel<string>("hoveredFeature", { default: "" });
   line-height: normal;
 }
 
+:deep(.el-form-item__label) {
+  color: var(--text-main);
+  font-weight: 500;
+}
+
 .feature-hint {
   position: absolute;
   bottom: 0;
@@ -192,9 +186,11 @@ const hoveredFeature = defineModel<string>("hoveredFeature", { default: "" });
   right: 0;
   padding: 8px 12px;
   font-size: 11px;
-  color: #909399;
-  background: #fff;
-  border-top: 1px solid #e4e7ed;
+  color: var(--text-muted);
+  background: var(--bg-glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid var(--border-color);
   line-height: 1.4;
   z-index: 1;
 }

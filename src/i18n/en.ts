@@ -14,6 +14,11 @@ export default {
     updateEngine: 'Update Engine',
     downloading: 'Downloading {progress}%',
     about: 'About',
+    settings: 'Settings',
+  },
+  settings: {
+    title: 'Settings',
+    close: 'Close',
   },
   about: {
     title: 'About',
@@ -47,6 +52,9 @@ export default {
     download: 'Download',
     readme: 'README',
     hidden: 'Show Hidden',
+    githubProxy: 'GitHub Download Proxy',
+    githubProxyTooltip: 'Used to accelerate downloading the miniserve engine and app updates from GitHub. Supports local HTTP/HTTPS proxies or online mirror gateways.',
+    githubProxyPlaceholder: 'Leave empty for direct, e.g. https://proxy.example.com/',
   },
   features: {
     randomRoute: 'Add random suffix to server path to prevent scanning',

@@ -23,6 +23,14 @@ watch(() => props.logs.length, () => {
 function clearLogs() {
   emit("clearLogs");
 }
+
+function getLogClass(log: string) {
+  if (log.includes("[ERROR]") || log.toLowerCase().includes("error") || log.toLowerCase().includes("failed")) return "log-error";
+  if (log.includes("[WARN]") || log.toLowerCase().includes("warn")) return "log-warn";
+  if (log.includes("[INFO]") || log.includes("Server event") || log.toLowerCase().includes("started")) return "log-info";
+  if (log.includes("http://")) return "log-success";
+  return "";
+}
 </script>
 
 <template>
@@ -34,8 +42,12 @@ function clearLogs() {
       </div>
     </template>
     <div ref="logBoxRef" class="log-box">
-      <p v-for="(log, i) in logs" :key="i" class="log-line">{{ log }}</p>
-      <p v-if="logs.length === 0" class="log-empty">{{ t('log.empty') }}</p>
+      <template v-if="logs.length === 0">
+        <p class="log-empty-prompt"><span class="prompt-symbol">$</span> {{ t('log.empty') }}<span class="cursor-blink">▊</span></p>
+      </template>
+      <template v-else>
+        <p v-for="(log, i) in logs" :key="i" class="log-line" :class="getLogClass(log)">{{ log }}</p>
+      </template>
     </div>
   </el-card>
 </template>
@@ -45,8 +57,21 @@ function clearLogs() {
   flex: 1 1 350px;
   display: flex;
   flex-direction: column;
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-speed) ease;
+}
+
+.log-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.log-card :deep(.el-card__header) {
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .log-card :deep(.el-card__body) {
@@ -63,13 +88,14 @@ function clearLogs() {
   align-items: center;
   justify-content: space-between;
   font-weight: 600;
+  font-size: 14px;
 }
 
 .log-box {
   background: #1e1e1e;
-  color: #4ADE80;
+  color: #a5b4fc;
   padding: 16px;
-  border-radius: 0 0 12px 12px;
+  border-radius: 0 0 8px 8px;
   font-family: "Consolas", "Monaco", monospace;
   font-size: 12px;
   line-height: 1.8;
@@ -84,9 +110,41 @@ function clearLogs() {
   word-break: break-all;
 }
 
-.log-empty {
+/* Console logs coloring */
+.log-error {
+  color: #f87171;
+}
+
+.log-warn {
+  color: #fbbf24;
+}
+
+.log-info {
+  color: #38bdf8;
+}
+
+.log-success {
+  color: #34d399;
+}
+
+.log-empty-prompt {
   color: #666;
-  text-align: center;
-  padding: 20px;
+}
+
+.prompt-symbol {
+  color: #818cf8;
+  margin-right: 8px;
+  font-weight: 600;
+}
+
+.cursor-blink {
+  color: #34d399;
+  animation: blink 1s step-end infinite;
+  margin-left: 2px;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 </style>

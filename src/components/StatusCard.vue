@@ -24,8 +24,8 @@ const { t } = useI18n();
   <el-card v-if="serverStatus?.running" class="status-card" shadow="hover">
     <template #header>
       <div class="card-header">
-        <span><el-icon><Cpu /></el-icon> {{ t('status.running') }}</span>
-        <el-tag type="success" size="small">{{ t('status.pid', { pid: serverStatus.pid }) }}</el-tag>
+        <span class="header-title"><el-icon><Cpu /></el-icon> {{ t('status.running') }}</span>
+        <el-tag type="success" size="small" effect="dark" class="pid-tag">{{ t('status.pid', { pid: serverStatus.pid }) }}</el-tag>
       </div>
     </template>
     <div class="url-layout">
@@ -38,10 +38,10 @@ const { t } = useI18n();
           @mouseenter="$emit('hoverUrl', idx)"
           @mouseleave="$emit('hoverUrl', null)"
         >
-          <el-link type="primary" :href="url" :underline="false" @click.prevent="$emit('openUrl', url)">
+          <el-link type="primary" :href="url" :underline="false" @click.prevent="$emit('openUrl', url)" class="url-link">
             {{ url }}
           </el-link>
-          <el-button type="primary" size="small" text @click="$emit('copyUrl', url, idx)">
+          <el-button type="primary" size="small" text @click="$emit('copyUrl', url, idx)" class="copy-btn">
             <el-icon><DocumentCopy /></el-icon>
             {{ copySuccessIdx.has(idx) ? t('status.copied') : t('status.copy') }}
           </el-button>
@@ -80,30 +80,52 @@ const { t } = useI18n();
   flex-shrink: 0;
   flex: 0 1 auto;
   border-radius: 8px;
-  transition: all 0.3s ease;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-speed) ease;
 }
 
 .status-card:hover {
-  box-shadow: 0 4px 20px rgba(64, 158, 255, 0.15);
+  box-shadow: var(--shadow-md);
+  border-color: rgba(64, 158, 255, 0.2);
+}
+
+:deep(.el-card__header) {
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-main);
   font-weight: 600;
+  font-size: 14px;
+}
+
+.pid-tag {
+  border-radius: 4px;
 }
 
 .url-layout {
   display: flex;
-  gap: 12px;
+  gap: 20px;
   min-height: auto;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
 }
 
 .url-column {
-  flex: 0 0 70%;
+  flex: 1;
+  max-width: 480px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -114,43 +136,41 @@ const { t } = useI18n();
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
-  background: #f5f7fa;
+  padding: 4px 8px;
+  background: var(--bg-url-item);
   border: 1px solid transparent;
   border-radius: 6px;
   gap: 8px;
   font-size: 12px;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease;
   width: 100%;
   cursor: pointer;
 }
 
-.url-item:hover {
-  background: #ecf5ff;
+.url-item:hover, .url-item.active {
+  background: var(--bg-url-item-hover);
 }
 
-.url-item .el-link {
+.url-link {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+}
+
+:deep(.url-link .el-link__inner) {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.url-item .el-link:hover {
-  text-decoration: none;
+.url-link:hover {
+  color: var(--primary-hover);
 }
 
-.url-item .el-button {
+.copy-btn {
   transition: all 0.2s ease;
-}
-
-.url-item .el-button:hover {
-  color: #409EFF;
-}
-
-.url-item.active {
-  background: #ecf5ff;
+  border-radius: 4px;
 }
 
 .qr-column {
@@ -160,12 +180,12 @@ const { t } = useI18n();
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #fafafa;
-  border: 1px solid #eee;
+  background: var(--bg-qr);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
+  position: relative;
+  overflow: hidden;
   align-self: center;
-  position: sticky;
-  top: 10px;
 }
 
 .qr-display {
@@ -184,7 +204,7 @@ const { t } = useI18n();
 }
 
 .qr-placeholder {
-  color: #909399;
+  color: var(--text-muted);
   font-size: 11px;
   text-align: center;
   box-sizing: border-box;
@@ -201,19 +221,31 @@ const { t } = useI18n();
 .qr-icon {
   width: 48px;
   height: 48px;
-  opacity: 0.15;
-  color: #303133;
+  opacity: 0.4;
+  color: var(--text-muted);
 }
 
 .idle-state {
   text-align: center;
   padding: 16px;
-  color: #909399;
+  color: var(--text-muted);
+}
+
+.idle-state p {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
 }
 
 .idle-state .hint {
   font-size: 13px;
   margin-top: 8px;
-  color: #c0c4cc;
+  color: var(--text-hint);
+  font-weight: normal;
 }
 </style>

@@ -28,43 +28,46 @@ defineEmits<{
 .toggle-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
+  gap: 6px;
+  padding: 3px 8px;
   border-radius: 6px;
   border: none;
-  background: #F4F4F5;
-  color: #3F3F46;
-  font-size: 12px;
+  background: var(--bg-pill);
+  color: var(--text-pill);
+  font-size: 11px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, transform 0.1s ease;
   user-select: none;
   white-space: nowrap;
   outline: none;
 }
 
 .toggle-pill:hover {
-  background: #E4E4E7;
+  background: var(--bg-pill-hover);
+}
+
+.toggle-pill:active {
+  transform: scale(0.97);
 }
 
 .toggle-pill.active {
-  background: #F4F4F5;
-  color: #3F3F46;
+  background: var(--bg-pill);
 }
 
 .toggle-pill.active:hover {
-  background: #E4E4E7;
+  background: var(--bg-pill-hover);
 }
 
 .toggle-pill.active .toggle-dot {
-  background: #409EFF;
+  background: var(--primary-color);
 }
 
 .toggle-dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: #A1A1AA;
-  transition: all 0.2s ease;
+  background: var(--dot-pill);
+  transition: background-color 0.2s ease;
   flex-shrink: 0;
 }
 </style>

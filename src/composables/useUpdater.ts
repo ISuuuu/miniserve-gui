@@ -45,28 +45,15 @@ export function useUpdater(
     }
   }
 
-  async function fetchUpdateManifest(originalUrl: string, proxyUrl: string) {
-    let resp: Response;
-    try {
-      resp = await fetch(originalUrl);
-    } catch (e) {
-      if (!proxyUrl) throw e;
-      resp = await fetch(proxyUrl);
-    }
-
-    if (!resp.ok && proxyUrl && resp.url !== proxyUrl) {
-      resp = await fetch(proxyUrl);
-    }
-    if (!resp.ok) throw new Error(`更新清单响应异常: ${resp.status}`);
-    return await resp.json();
+  async function fetchUpdateManifest(url: string) {
+    return await invoke<any>("fetch_update_manifest", { url });
   }
 
   async function installAppImageUpdate(
     version: string,
     originalUrl: string,
-    proxyUrl: string,
   ) {
-    const updateJson = await fetchUpdateManifest(originalUrl, proxyUrl);
+    const updateJson = await fetchUpdateManifest(originalUrl);
     const latestVersion = (
       version ||
       updateJson.version ||
@@ -154,7 +141,6 @@ export function useUpdater(
         await invoke<UpdaterConfig>("get_updater_config");
       const originalUrl = updaterConfig.endpoints[0] || "";
       const proxyPrefix = updaterConfig.proxy || "";
-      const proxyUrl = proxyPrefix ? `${proxyPrefix}${originalUrl}` : "";
 
       const { check } = await import("@tauri-apps/plugin-updater");
 
@@ -167,15 +153,12 @@ export function useUpdater(
           ),
         ]);
       } catch (e) {
-        if (!proxyUrl) throw e;
-
-        logs.addLog(
-          t("update.directConnectTimeout", { proxy: proxyUrl }),
-        );
-        const resp = await fetch(proxyUrl);
-        if (!resp.ok)
-          throw new Error(`代理响应异常: ${resp.status}`);
-        const updateJson = await resp.json();
+        if (proxyPrefix) {
+          logs.addLog(
+            t("update.directConnectTimeout", { proxy: proxyPrefix }),
+          );
+        }
+        const updateJson = await invoke<any>("fetch_update_manifest", { url: originalUrl });
 
         const currentVersion = appVersion().replace(/^v/, "");
         const latestVersion = (updateJson.version || "").replace(
@@ -276,7 +259,6 @@ export function useUpdater(
           await installAppImageUpdate(
             update.version,
             originalUrl,
-            proxyUrl,
           );
           return;
         }

@@ -220,6 +220,7 @@ pub fn run() {
             commands::generate_qr,
             commands::get_install_dir,
             commands::get_updater_config,
+            commands::fetch_update_manifest,
             commands::download_and_install_update,
             commands::get_package_type,
             commands::show_window_command,
