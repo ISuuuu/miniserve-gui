@@ -1,5 +1,6 @@
 use std::process::Child;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
 
 use serde::{Deserialize, Serialize};
 
@@ -83,6 +84,8 @@ pub struct QrCodeResponse {
 pub struct AppState {
     pub child: Mutex<Option<Child>>,
     pub server_url: Mutex<Option<String>>,
+    /// 防止并发启动：同一时间只允许一个 start_server 执行
+    pub starting: AtomicBool,
     #[cfg(windows)]
     pub job_handle: Mutex<Option<*mut std::ffi::c_void>>,
 }
@@ -98,6 +101,7 @@ impl Default for AppState {
         Self {
             child: Mutex::new(None),
             server_url: Mutex::new(None),
+            starting: AtomicBool::new(false),
             #[cfg(windows)]
             job_handle: Mutex::new(None),
         }

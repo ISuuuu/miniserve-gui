@@ -1,6 +1,7 @@
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Write as IoWrite};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 
 use futures_util::StreamExt;
@@ -265,6 +266,20 @@ pub async fn start_server(
     state: State<'_, AppState>,
     app_handle: AppHandle,
 ) -> Result<ServerStatus, String> {
+    // 防止并发启动
+    if state.starting.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+        return Err("服务正在启动中，请稍候".into());
+    }
+
+    // 使用 drop guard 确保 starting 标志在函数退出时重置
+    struct StartingGuard<'a>(&'a AtomicBool);
+    impl Drop for StartingGuard<'_> {
+        fn drop(&mut self) {
+            self.0.store(false, Ordering::SeqCst);
+        }
+    }
+    let _guard = StartingGuard(&state.starting);
+
     // 验证配置
     validate_config(&config)?;
 
