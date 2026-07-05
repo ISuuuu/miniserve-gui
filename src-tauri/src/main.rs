@@ -1,4 +1,5 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
+// Force rebuild to apply latest user transparent icon
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
