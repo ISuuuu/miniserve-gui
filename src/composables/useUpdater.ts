@@ -1,6 +1,6 @@
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { message, dialog } from "@/utils/discrete";
 import { useI18n } from "vue-i18n";
 import type { useLogs } from "./useLogs";
 
@@ -41,7 +41,7 @@ export function useUpdater(
       await tauriOpenUrl(url);
     } catch (e) {
       console.error("Failed to open URL:", e);
-      ElMessage.error(t("messages.openUrlFailed", { error: e }));
+      message.error(t("messages.openUrlFailed", { error: e }));
     }
   }
 
@@ -64,7 +64,7 @@ export function useUpdater(
     if (!platformInfo)
       throw new Error(t("update.platformNotAvailable", { platform }));
 
-    ElMessage.success(t("update.downloading", { version: latestVersion }));
+    message.success(t("update.downloading", { version: latestVersion }));
     await invoke("download_and_install_update", {
       url: platformInfo.url,
       signature: platformInfo.signature,
@@ -83,7 +83,7 @@ export function useUpdater(
       ? ["/S", `/D=${installDir}`]
       : undefined;
 
-    ElMessage.success(t("update.downloading", { version: update.version }));
+    message.success(t("update.downloading", { version: update.version }));
     updateDownloading.value = true;
     updateProgress.value = 0;
     let totalSize = 0;
@@ -126,7 +126,7 @@ export function useUpdater(
     } finally {
       updateDownloading.value = false;
     }
-    ElMessage.success(t("update.updateComplete"));
+    message.success(t("update.updateComplete"));
     const { relaunch } = await import("@tauri-apps/plugin-process");
     await relaunch();
   }
@@ -175,26 +175,22 @@ export function useUpdater(
                 packageType,
               }),
             );
-            ElMessageBox.confirm(
-              t("update.debOrPortableNotSupported", {
+            dialog.info({
+              title: "发现更新",
+              content: t("update.debOrPortableNotSupported", {
                 version: latestVersion,
                 packageType:
                   packageType === "deb"
                     ? "DEB安装版"
                     : "Windows便携版",
               }),
-              "发现更新",
-              {
-                confirmButtonText: t("update.goToDownload"),
-                cancelButtonText: t("update.later"),
-                type: "info",
-              },
-            )
-              .then(() => {
+              positiveText: t("update.goToDownload"),
+              negativeText: t("update.later"),
+              onPositiveClick: () => {
                 const releaseUrl = t("update.releasePage");
                 openUrl(releaseUrl);
-              })
-              .catch(() => {});
+              },
+            });
             return;
           }
 
@@ -211,7 +207,7 @@ export function useUpdater(
               t("update.platformNotAvailable", { platform }),
             );
 
-          ElMessage.success(
+          message.success(
             t("update.downloading", { version: latestVersion }),
           );
           await invoke("download_and_install_update", {
@@ -233,26 +229,22 @@ export function useUpdater(
               packageType,
             }),
           );
-          ElMessageBox.confirm(
-            t("update.debOrPortableNotSupported", {
+          dialog.info({
+            title: "发现更新",
+            content: t("update.debOrPortableNotSupported", {
               version: update.version,
               packageType:
                 packageType === "deb"
                   ? "DEB安装版"
                   : "Windows便携版",
             }),
-            "发现更新",
-            {
-              confirmButtonText: t("update.goToDownload"),
-              cancelButtonText: t("update.later"),
-              type: "info",
-            },
-          )
-            .then(() => {
+            positiveText: t("update.goToDownload"),
+            negativeText: t("update.later"),
+            onPositiveClick: () => {
               const releaseUrl = t("update.releasePage");
               openUrl(releaseUrl);
-            })
-            .catch(() => {});
+            },
+          });
           return;
         }
         if (packageType === "appimage") {
@@ -264,11 +256,11 @@ export function useUpdater(
         }
         await installUpdate(update);
       } else {
-        ElMessage.info(t("update.alreadyLatest"));
+        message.info(t("update.alreadyLatest"));
       }
     } catch (e: any) {
       logs.addLog(t("update.checkFailed", { error: e }));
-      ElMessage.error(
+      message.error(
         t("update.checkFailed", { error: e.message || e }),
       );
     } finally {

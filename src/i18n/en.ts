@@ -3,6 +3,7 @@ export default {
     title: 'miniserve-gui',
     description: 'A lightweight cross-platform file sharing tool',
     basedOn: 'Built with Tauri and {link}.',
+    basedOnPrefix: 'Built with Tauri and',
   },
   header: {
     start: 'Start',

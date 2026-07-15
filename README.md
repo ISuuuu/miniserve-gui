@@ -43,7 +43,7 @@
 
 ## 技术栈
 
-- **前端**: Vue 3 (Composition API) + TypeScript + Vite + Element Plus（按需加载） + vue-i18n
+- **前端**: Vue 3 (Composition API) + TypeScript + Vite + Naive UI + vue-i18n
 - **后端**: Tauri 2 (Rust)
 - **引擎**: [miniserve](https://github.com/svenstaro/miniserve)
 

@@ -1,6 +1,6 @@
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { ElMessage } from "element-plus";
+import { message } from "@/utils/discrete";
 import { useI18n } from "vue-i18n";
 import type { ServerConfig, ServerStatus } from "../types";
 import { useQr } from "./useQr";
@@ -19,11 +19,11 @@ export function useServer(
 
   async function startServer() {
     if (!config.path) {
-      ElMessage.warning(t("messages.selectFolderFirst"));
+      message.warning(t("messages.selectFolderFirst"));
       return;
     }
     if (!engineExists()) {
-      ElMessage.warning(t("messages.downloadEngineFirst"));
+      message.warning(t("messages.downloadEngineFirst"));
       return;
     }
     loading.value = true;
@@ -45,13 +45,13 @@ export function useServer(
             : [];
       if (urlsToShow.length > 0) {
         logs.addLog(t("messages.serviceStarted", { urls: urlsToShow.join(", ") }));
-        ElMessage.success(t("messages.serviceStarted", { urls: "" }));
+        message.success(t("messages.serviceStarted", { urls: "" }));
         serverUrls.value = urlsToShow;
         await generateQrCodes(urlsToShow);
       }
     } catch (e) {
       logs.addLog(t("messages.startFailed", { error: e }));
-      ElMessage.error(t("messages.startFailed", { error: e }));
+      message.error(t("messages.startFailed", { error: e }));
     } finally {
       loading.value = false;
       logs.addLog(t("messages.loadingReset"));
@@ -73,9 +73,9 @@ export function useServer(
       clearQrCodes();
       serverUrls.value = [];
       logs.addLog(t("messages.serviceStopped"));
-      ElMessage.info(t("messages.serviceStopped"));
+      message.info(t("messages.serviceStopped"));
     } catch (e) {
-      ElMessage.error(t("messages.stopFailed", { error: e }));
+      message.error(t("messages.stopFailed", { error: e }));
     } finally {
       loading.value = false;
     }

@@ -3,6 +3,7 @@ export default {
     title: 'miniserve-gui',
     description: '一个轻量级的跨平台文件分享工具',
     basedOn: '基于 Tauri 和 {link} 构建。',
+    basedOnPrefix: '基于 Tauri 和',
   },
   header: {
     start: '启动',

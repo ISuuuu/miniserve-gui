@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { DocumentCopy, Cpu } from "@element-plus/icons-vue";
+import { CopyOutline, HardwareChipOutline } from "@vicons/ionicons5";
 import { useI18n } from "vue-i18n";
 import type { ServerStatus } from "../types";
 
@@ -21,11 +21,11 @@ const { t } = useI18n();
 </script>
 
 <template>
-  <el-card v-if="serverStatus?.running" class="status-card" shadow="hover">
+  <n-card v-if="serverStatus?.running" class="status-card" size="small">
     <template #header>
       <div class="card-header">
-        <span class="header-title"><el-icon><Cpu /></el-icon> {{ t('status.running') }}</span>
-        <el-tag type="success" size="small" effect="dark" class="pid-tag">{{ t('status.pid', { pid: serverStatus.pid }) }}</el-tag>
+        <span class="header-title"><n-icon size="14" style="margin-right: 4px;"><HardwareChipOutline /></n-icon> {{ t('status.running') }}</span>
+        <n-tag :bordered="false" type="success" size="small" class="pid-tag">{{ t('status.pid', { pid: serverStatus.pid }) }}</n-tag>
       </div>
     </template>
     <div class="url-layout">
@@ -38,13 +38,15 @@ const { t } = useI18n();
           @mouseenter="$emit('hoverUrl', idx)"
           @mouseleave="$emit('hoverUrl', null)"
         >
-          <el-link type="primary" :href="url" :underline="false" @click.prevent="$emit('openUrl', url)" class="url-link">
+          <a :href="url" class="url-link" @click.prevent="$emit('openUrl', url)">
             {{ url }}
-          </el-link>
-          <el-button type="primary" size="small" text @click="$emit('copyUrl', url, idx)" class="copy-btn">
-            <el-icon><DocumentCopy /></el-icon>
+          </a>
+          <n-button type="primary" size="tiny" text @click="$emit('copyUrl', url, idx)" class="copy-btn">
+            <template #icon>
+              <n-icon size="14"><CopyOutline /></n-icon>
+            </template>
             {{ copySuccessIdx.has(idx) ? t('status.copied') : t('status.copy') }}
-          </el-button>
+          </n-button>
         </div>
       </div>
       <div class="qr-column">
@@ -65,14 +67,14 @@ const { t } = useI18n();
         </div>
       </div>
     </div>
-  </el-card>
+  </n-card>
 
-  <el-card v-else class="status-card" shadow="hover">
+  <n-card v-else class="status-card" size="small">
     <div class="idle-state">
-      <p><el-icon><Cpu /></el-icon> {{ t('status.notRunning') }}</p>
+      <p><n-icon size="16" style="margin-right: 4px;"><HardwareChipOutline /></n-icon> {{ t('status.notRunning') }}</p>
       <p class="hint">{{ t('status.hint') }}</p>
     </div>
-  </el-card>
+  </n-card>
 </template>
 
 <style scoped>
@@ -84,16 +86,13 @@ const { t } = useI18n();
   border: 1px solid var(--border-color);
   box-shadow: var(--shadow-sm);
   transition: all var(--transition-speed) ease;
+  max-height: 50%;
+  overflow-y: auto;
 }
 
 .status-card:hover {
   box-shadow: var(--shadow-md);
   border-color: rgba(64, 158, 255, 0.2);
-}
-
-:deep(.el-card__header) {
-  padding: 10px 20px;
-  border-bottom: 1px solid var(--border-color);
 }
 
 .card-header {
@@ -120,22 +119,22 @@ const { t } = useI18n();
   gap: 20px;
   min-height: auto;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
 }
 
 .url-column {
   flex: 1;
-  max-width: 480px;
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
+  align-items: center;
 }
 
 .url-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   padding: 4px 8px;
   background: var(--bg-url-item);
   border: 1px solid transparent;
@@ -145,6 +144,7 @@ const { t } = useI18n();
   transition: background-color 0.2s ease;
   width: 100%;
   cursor: pointer;
+  text-align: center;
 }
 
 .url-item:hover, .url-item.active {
@@ -155,16 +155,17 @@ const { t } = useI18n();
   flex: 1;
   min-width: 0;
   overflow: hidden;
-}
-
-:deep(.url-link .el-link__inner) {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: var(--primary-color);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
   white-space: nowrap;
+  text-overflow: ellipsis;
+  display: block;
 }
 
 .url-link:hover {
+  text-decoration: underline;
   color: var(--primary-hover);
 }
 
