@@ -60,9 +60,9 @@ async fn fetch_with_proxy(
         _ => {
             if let Some(proxy) = proxy_url {
                 info!("直连失败，尝试使用代理: {}", proxy);
-                client.get(proxy).send().await.map_err(|e| format!("代理也无法访问: {}", e))
+                client.get(proxy).send().await.map_err(|e| format!("PROXY_FAILED:{}", e))
             } else {
-                Err("直连失败且未配置代理".into())
+                Err("PROXY_NOT_CONFIGURED".into())
             }
         }
     }
@@ -518,11 +518,11 @@ fn get_updater_pubkey(app_handle: &AppHandle) -> Result<String, String> {
 fn verify_signature(data: &[u8], signature_b64: &str, pubkey_b64: &str) -> Result<(), String> {
     use minisign_verify::{PublicKey, Signature};
     let public_key = PublicKey::decode(pubkey_b64)
-        .map_err(|e| format!("解析公钥失败: {}", e))?;
+        .map_err(|e| format!("PUBKEY_PARSE_FAILED:{}", e))?;
     let signature = Signature::decode(signature_b64)
-        .map_err(|e| format!("解析签名失败: {}", e))?;
+        .map_err(|e| format!("SIGNATURE_PARSE_FAILED:{}", e))?;
     public_key.verify(data, &signature, false)
-        .map_err(|_| "签名验证失败：文件可能已被篡改".into())
+        .map_err(|_| "SIGNATURE_INVALID".into())
 }
 
 /// 以 root 权限替换 AppImage。shell 片段是固定字符串，路径只通过 argv 传入，
@@ -544,7 +544,7 @@ fn run_pkexec_appimage_replace(
             final_path,
         ])
         .output()
-        .map_err(|e| format!("pkexec 执行失败: {}", e))
+        .map_err(|e| format!("PKEXEC_FAILED:{}", e))
 }
 
 #[tauri::command]
@@ -576,9 +576,9 @@ pub async fn fetch_update_manifest(
 
     let response = fetch_with_proxy(&client, &url, proxy_url.as_deref()).await?;
     if !response.status().is_success() {
-        return Err(format!("更新清单响应异常: {}", response.status()));
+        return Err(format!("MANIFEST_FETCH_FAILED:{}", response.status()));
     }
-    response.json().await.map_err(|e| format!("解析更新清单失败: {}", e))
+    response.json().await.map_err(|e| format!("MANIFEST_PARSE_FAILED:{}", e))
 }
 
 #[tauri::command]
@@ -593,7 +593,7 @@ pub async fn download_and_install_update(
         // 如果当前不是 AppImage 环境，说明是通过 deb 或其他方式安装的
         // 直接返回错误，让前端引导用户去 Release 页面下载
         if std::env::var("APPIMAGE").is_err() {
-            return Err("由于您使用的是非便携版本，请前往 Github Release 页面下载最新的安装包进行更新。".into());
+            return Err("NON_PORTABLE_INSTALL".into());
         }
     }
 
@@ -601,39 +601,49 @@ pub async fn download_and_install_update(
     let client = build_http_client()?;
 
     let proxy_prefix = get_proxy_prefix(&app_handle).unwrap_or_default();
-    let download_url = if !proxy_prefix.is_empty() && url.contains("github.com") {
-        apply_proxy(&proxy_prefix, &url).unwrap_or(url.clone())
+    let proxy_url = if !proxy_prefix.is_empty() {
+        apply_proxy(&proxy_prefix, &url)
     } else {
-        url.clone()
+        None
     };
 
-    info!("下载更新: {}", download_url);
-
-    let response = client
-        .get(&download_url)
-        .send()
-        .await
-        .map_err(|e| format!("下载失败: {}", e))?;
+    info!("下载更新: {}", url);
+    let response = fetch_with_proxy(&client, &url, proxy_url.as_deref()).await?;
 
     if !response.status().is_success() {
-        return Err(format!("下载失败: HTTP {}", response.status()));
+        return Err(format!("DOWNLOAD_FAILED:HTTP {}", response.status()));
     }
 
-    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+    // Stream download with progress events
+    let total_size = response.content_length().unwrap_or(0);
+    let mut downloaded: u64 = 0;
+    let mut all_bytes = Vec::new();
+    use futures_util::StreamExt;
 
-    // 验证签名
+    let mut stream = response.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("DOWNLOAD_CHUNK_FAILED:{}", e))?;
+        all_bytes.extend_from_slice(&chunk);
+        downloaded += chunk.len() as u64;
+        let _ = app_handle.emit("update-download-progress", serde_json::json!({
+            "downloaded": downloaded,
+            "total": total_size,
+        }));
+    }
+
+    // Verify signature
     if !signature.is_empty() {
         match get_updater_pubkey(&app_handle) {
             Ok(pubkey) => {
-                verify_signature(&bytes, &signature, &pubkey)?;
+                verify_signature(&all_bytes, &signature, &pubkey)?;
                 info!("签名验证通过");
             }
             Err(e) => {
-                return Err(format!("无法获取公钥进行签名验证: {}", e));
+                return Err(format!("PUBKEY_NOT_FOUND:{}", e));
             }
         }
     } else {
-        return Err("更新清单未提供签名，拒绝安装".into());
+        return Err("SIGNATURE_MISSING".into());
     }
 
     // 使用随机临时文件名，防止符号链接攻击
@@ -644,9 +654,9 @@ pub async fn download_and_install_update(
         .prefix("miniserve-update-")
         .suffix(&format!(".{}", ext.to_string_lossy()))
         .tempfile_in(std::env::temp_dir())
-        .map_err(|e| format!("创建临时文件失败: {}", e))?;
+        .map_err(|e| format!("TEMP_FILE_FAILED:{}", e))?;
     use std::io::Write;
-    temp_file.write_all(&bytes).map_err(|e| e.to_string())?;
+    temp_file.write_all(&all_bytes).map_err(|e| e.to_string())?;
     let temp_path = temp_file.into_temp_path();
     info!("更新已下载到: {:?}", temp_path);
 
@@ -663,7 +673,7 @@ pub async fn download_and_install_update(
             cmd.arg(format!("/D={}", dir.display()));
         }
 
-        cmd.spawn().map_err(|e| format!("启动安装程序失败: {}", e))?;
+        cmd.spawn().map_err(|e| format!("INSTALLER_LAUNCH_FAILED:{}", e))?;
         info!("安装程序已启动，正在退出当前进程以释放文件锁");
         app_handle.exit(0);
     }
@@ -680,7 +690,7 @@ pub async fn download_and_install_update(
             let output = std::process::Command::new("pkexec")
                 .args(["dpkg", "-i", &source_path])
                 .output()
-                .map_err(|e| format!("pkexec 执行失败: {}", e))?;
+                .map_err(|e| format!("PKEXEC_FAILED:{}", e))?;
             (output, None)
         } else {
             info!("执行 AppImage/二进制文件 替换...");
@@ -703,10 +713,10 @@ pub async fn download_and_install_update(
                 .split('/')
                 .last()
                 .filter(|name| name.ends_with(".AppImage"))
-                .ok_or("无法从更新 URL 获取 AppImage 文件名")?;
+                .ok_or("APPIMAGE_URL_PARSE_FAILED")?;
             let final_name = std::path::Path::new(raw_name)
                 .file_name()
-                .ok_or("AppImage 文件名无效")?;
+                .ok_or("APPIMAGE_NAME_INVALID")?;
             let final_path = target_dir.join(final_name).to_string_lossy().to_string();
 
             let output = run_pkexec_appimage_replace(&target_path, &source_path, &final_path)?;
@@ -718,7 +728,7 @@ pub async fn download_and_install_update(
             if let Some(path) = relaunch_path {
                 std::process::Command::new(&path)
                     .spawn()
-                    .map_err(|e| format!("启动新版 AppImage 失败: {}", e))?;
+                    .map_err(|e| format!("APPIMAGE_RELAUNCH_FAILED:{}", e))?;
                 app_handle.exit(0);
             } else {
                 app_handle.restart();
@@ -726,7 +736,7 @@ pub async fn download_and_install_update(
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
             log::error!("pkexec 失败: {}", stderr);
-            return Err(format!("更新失败: {}", stderr.trim()));
+            return Err(format!("INSTALL_FAILED:{}", stderr.trim()));
         }
         Ok(())
     }
@@ -739,7 +749,7 @@ pub async fn download_and_install_update(
         let target_path = current_exe.to_string_lossy().to_string();
 
         // macOS: 替换并重启
-        fs::copy(&temp_path, &target_path).map_err(|e| format!("替换失败: {}", e))?;
+        fs::copy(&temp_path, &target_path).map_err(|e| format!("REPLACE_FAILED:{}", e))?;
 
         // 设置可执行权限
         Command::new("chmod")
