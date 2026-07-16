@@ -28,46 +28,53 @@ defineEmits<{
 .toggle-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  border: none;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: 10px;
+  border: 1.5px solid transparent;
   background: var(--bg-pill);
   color: var(--text-pill);
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.1s ease;
+  transition: all 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   user-select: none;
   white-space: nowrap;
   outline: none;
+  line-height: 1.4;
 }
 
 .toggle-pill:hover {
   background: var(--bg-pill-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 .toggle-pill:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 .toggle-pill.active {
-  background: var(--bg-pill);
+  background: var(--pill-active-bg);
+  border-color: var(--pill-active-border);
+  color: var(--pill-active-text);
 }
 
 .toggle-pill.active:hover {
-  background: var(--bg-pill-hover);
+  background: var(--pill-active-bg-hover);
+}
+
+.toggle-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot-pill);
+  transition: all 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  flex-shrink: 0;
 }
 
 .toggle-pill.active .toggle-dot {
   background: var(--primary-color);
-}
-
-.toggle-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--dot-pill);
-  transition: background-color 0.2s ease;
-  flex-shrink: 0;
+  box-shadow: 0 0 0 3px var(--pill-active-dot-ring);
 }
 </style>

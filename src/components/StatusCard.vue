@@ -92,7 +92,7 @@ const { t } = useI18n();
 
 .status-card:hover {
   box-shadow: var(--shadow-md);
-  border-color: rgba(64, 158, 255, 0.2);
+  border-color: rgba(79, 70, 229, 0.15);
 }
 
 .card-header {
@@ -135,29 +135,30 @@ const { t } = useI18n();
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 8px;
+  padding: 6px 16px;
   background: var(--bg-url-item);
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 8px;
   gap: 8px;
   font-size: 12px;
-  transition: background-color 0.2s ease;
+  transition: all 0.2s ease;
   width: 100%;
+  max-width: 400px;
   cursor: pointer;
-  text-align: center;
+  box-sizing: border-box;
 }
 
 .url-item:hover, .url-item.active {
   background: var(--bg-url-item-hover);
+  border-color: rgba(79, 70, 229, 0.1);
 }
 
 .url-link {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   color: var(--primary-color);
   text-decoration: none;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   white-space: nowrap;
   text-overflow: ellipsis;

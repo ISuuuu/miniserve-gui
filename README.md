@@ -1,8 +1,6 @@
 为[miniserve](https://github.com/svenstaro/miniserve) 提供图形化界面客户端。
 
-
 ![Screenshot](screenshot.png)
-
 
 ## 功能特性
 
@@ -11,35 +9,33 @@
 - ✅ **服务控制** - 一键启动/停止服务，实时显示服务状态
 - ✅ **二维码分享** - 生成二维码，移动端扫码即访问
 - ✅ **配置持久化** - 保存配置到本地，重启后自动加载
-- ✅ **智能版本更新** - 根据安装环境自动选择最佳更新方案
 
 ## 下载
 
 从 [Releases](https://github.com/ISuuuu/miniserve-gui/releases) 下载最新版本：
 
-| 平台 | 安装版 | 便携版 (Portable) |
-|------|------|------|
-| **Windows** | `.exe` (NSIS 安装包) | `_portable_x64.exe` (单文件版) |
-| **Linux** | `.deb` /`.rpm` (安装包) | `.AppImage` (通用便携版) |
-| **macOS** (未测试) | `.dmg` | - | 
+| 平台        | 安装版                  | 便携版 (Portable)              |
+| ----------- | ----------------------- | ------------------------------ |
+| **Windows** | `.exe` (NSIS 安装包)    | `_portable_x64.exe` (单文件版) |
+| **Linux**   | `.deb` /`.rpm` (安装包) | `.AppImage` (通用便携版)       |
 
 ## 支持的参数
 
-| 分类 | 参数 | 说明 |
-|------|------|------|
-| 基础运行 | `PATH` | 要分享的文件夹路径 |
-| | `-p, --port` | 服务端口（默认 8080）|
-| | `-i, --interfaces` | 绑定网卡（0.0.0.0 或 127.0.0.1）|
-| 安全控制 | `-a, --auth` | 用户名:密码 认证 |
-| | `-u, --upload` | 允许访客上传文件 |
-| | ` -u -U` | 允许创建目录 |
-| 界面展示 | `--color-scheme` | 配色主题（squirrel, archlinux, zenburn, monokai）|
-| | `--title` | 网页标题 |
-| 高级进阶 | `-H, --hidden` | 显示点开头的文件 |
-| | `--random-route ` | 随机路径 |
-| | `--readme ` | 自动渲染 README |
-| | `-z` | 一键打包下载 |
-| | `--enable-webdav` | 启用 WebDAV 支持 |
+| 分类     | 参数               | 说明                                              |
+| -------- | ------------------ | ------------------------------------------------- |
+| 基础运行 | `PATH`             | 要分享的文件夹路径                                |
+|          | `-p, --port`       | 服务端口（默认 8080）                             |
+|          | `-i, --interfaces` | 绑定网卡（0.0.0.0 或 127.0.0.1）                  |
+| 安全控制 | `-a, --auth`       | 用户名:密码 认证                                  |
+|          | `-u, --upload`     | 允许访客上传文件                                  |
+|          | ` -u -U`           | 允许创建目录                                      |
+| 界面展示 | `--color-scheme`   | 配色主题（squirrel, archlinux, zenburn, monokai） |
+|          | `--title`          | 网页标题                                          |
+| 高级进阶 | `-H, --hidden`     | 显示点开头的文件                                  |
+|          | `--random-route `  | 随机路径                                          |
+|          | `--readme `        | 自动渲染 README                                   |
+|          | `-z`               | 一键打包下载                                      |
+|          | `--enable-webdav`  | 启用 WebDAV 支持                                  |
 
 ## 技术栈
 
@@ -114,6 +110,7 @@ pnpm run tauri build
 - **Linux/macOS**: `~/.local/share/miniserve-gui/bin/miniserve`
 
 配置 JSON:
+
 - **Windows**: `%APPDATA%/miniserve-gui/config.json`
 - **Linux/macOS**: `~/.config/miniserve-gui/config.json`
 

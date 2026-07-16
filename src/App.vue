@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { darkTheme } from "naive-ui";
+import type { GlobalThemeOverrides } from "naive-ui";
 import { isDarkTheme, message } from "./utils/discrete";
 import {
   DownloadOutline,
@@ -27,6 +28,60 @@ import { useUpdater } from "./composables/useUpdater";
 const { t } = useI18n();
 
 const theme = computed(() => (isDarkTheme.value ? darkTheme : null));
+
+const themeOverrides = computed<GlobalThemeOverrides>(() => {
+  const isDark = isDarkTheme.value;
+  const primaryColor = isDark ? "#3b82f6" : "#2563eb";
+  const primaryColorHover = isDark ? "#60a5fa" : "#3b82f6";
+  const primaryColorPressed = isDark ? "#2563eb" : "#1d4ed8";
+  const primaryColorSuppl = isDark ? "rgba(59, 130, 246, 0.15)" : "rgba(37, 99, 235, 0.08)";
+
+  const successColor = "#10b981";
+  const successColorHover = "#34d399";
+  const successColorPressed = "#059669";
+  const successColorSuppl = isDark ? "rgba(16, 185, 129, 0.15)" : "rgba(16, 185, 129, 0.08)";
+
+  const errorColor = "#f43f5e";
+  const errorColorHover = "#fda4af";
+  const errorColorPressed = "#e11d48";
+  const errorColorSuppl = isDark ? "rgba(244, 63, 94, 0.15)" : "rgba(244, 63, 94, 0.08)";
+
+  return {
+    common: {
+      primaryColor,
+      primaryColorHover,
+      primaryColorPressed,
+      primaryColorSuppl,
+      successColor,
+      successColorHover,
+      successColorPressed,
+      successColorSuppl,
+      errorColor,
+      errorColorHover,
+      errorColorPressed,
+      errorColorSuppl,
+      borderRadius: "10px",
+    },
+    Card: {
+      borderRadius: "12px",
+    },
+    Button: {
+      borderRadiusMedium: "8px",
+      borderRadiusSmall: "6px",
+      borderRadiusTiny: "4px",
+    },
+    Input: {
+      borderRadius: "8px",
+    },
+    Select: {
+      peers: {
+        InternalSelection: {
+          borderRadius: "8px",
+        },
+      },
+    },
+  };
+});
 
 // ============ Composables ============
 
@@ -168,7 +223,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <n-config-provider :theme="theme">
+  <n-config-provider :theme="theme" :theme-overrides="themeOverrides">
     <n-dialog-provider>
       <n-message-provider>
         <div class="app-container">
@@ -178,6 +233,8 @@ onUnmounted(() => {
               <div class="header-buttons">
                 <n-button
                   type="success"
+                  ghost
+                  size="small"
                   :loading="serverModule.loading.value"
                   class="btn-start"
                   @click="serverModule.startServer"
@@ -190,6 +247,8 @@ onUnmounted(() => {
                 <n-button
                   v-if="serverModule.serverStatus.value?.running"
                   type="error"
+                  ghost
+                  size="small"
                   :loading="serverModule.loading.value"
                   class="btn-stop"
                   @click="serverModule.stopServer"
@@ -257,19 +316,15 @@ onUnmounted(() => {
 
           <!-- 设置 Modal -->
           <n-modal v-model:show="settingsVisible" preset="card" :title="t('settings.title')" style="width: 440px" class="premium-modal">
-            <div style="padding: 10px 0;">
-              <div class="form-row">
-                <label class="form-label" style="width: 125px;">{{ t('config.githubProxy') }}</label>
-                <div class="form-control">
-                  <n-input
-                    :value="configModule.config.github_proxy"
-                    :placeholder="t('config.githubProxyPlaceholder')"
-                    @update:value="configModule.config.github_proxy = $event"
-                  />
-                  <div class="form-item-hint">
-                    {{ t('config.githubProxyTooltip') }}
-                  </div>
-                </div>
+            <div class="settings-form">
+              <label class="settings-label">{{ t('config.githubProxy') }}</label>
+              <n-input
+                :value="configModule.config.github_proxy"
+                :placeholder="t('config.githubProxyPlaceholder')"
+                @update:value="configModule.config.github_proxy = $event"
+              />
+              <div class="settings-hint">
+                {{ t('config.githubProxyTooltip') }}
               </div>
             </div>
             <template #footer>
@@ -279,12 +334,18 @@ onUnmounted(() => {
 
           <!-- 关于软件 Modal -->
           <n-modal v-model:show="aboutVisible" style="width: 380px" class="about-modal">
-            <div class="about-content">
-              <div class="about-banner">
-                <h3 class="about-name" @click="openUrl('https://github.com/ISuuuu/miniserve-gui')">miniserve-gui</h3>
-                <n-tag :bordered="false" type="info" size="small" round>{{ t('about.version', { version: appVersion || t('about.unknownVersion') }) }}</n-tag>
+            <div class="about-content-modern">
+              <div class="about-header-modern">
+                <div class="about-icon-box">
+                  <svg class="about-app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="2" width="20" height="20" rx="4" />
+                    <path d="M9 17V7l7 5z" />
+                  </svg>
+                </div>
+                <h3 class="about-name-modern" @click="openUrl('https://github.com/ISuuuu/miniserve-gui')">miniserve-gui</h3>
+                <n-tag :bordered="false" type="primary" size="small" round>v{{ appVersion || t('about.unknownVersion') }}</n-tag>
               </div>
-              <div class="about-body">
+              <div class="about-body-modern">
                 <p class="about-desc">
                   {{ t('app.description') }}
                 </p>
@@ -293,13 +354,15 @@ onUnmounted(() => {
                   <a href="#" @click.prevent="openUrl('https://github.com/svenstaro/miniserve')" class="about-link">svenstaro/miniserve</a>
                 </p>
               </div>
-              <div class="about-footer">
+              <div class="about-footer-modern">
                 <n-button
                   type="primary"
+                  ghost
+                  size="small"
                   :loading="updaterModule.checkingUpdate.value"
                   @click="updaterModule.checkForUpdates"
                 >{{ t('about.checkUpdate') }}</n-button>
-                <n-button @click="aboutVisible = false">{{ t('about.close') }}</n-button>
+                <n-button size="small" @click="aboutVisible = false">{{ t('about.close') }}</n-button>
               </div>
             </div>
           </n-modal>
@@ -368,42 +431,50 @@ onUnmounted(() => {
 
 <style>
 :root {
-  --primary-color: #409eff;
-  --primary-hover: #66b1ff;
-  --primary-light: #ecf5ff;
-  --bg-app: #f5f7fa;
+  --primary-color: #2563eb;
+  --primary-hover: #3b82f6;
+  --primary-light: rgba(37, 99, 235, 0.05);
+  --bg-app: #fafafa;
   --bg-card: #ffffff;
-  --bg-glass: rgba(255, 255, 255, 0.85);
-  --border-color: #e4e7ed;
-  --text-main: #303133;
-  --text-muted: #909399;
-  --text-hint: #c0c4cc;
+  --bg-glass: rgba(255, 255, 255, 0.8);
+  --border-color: #e2e8f0;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --text-hint: #94a3b8;
 
   /* Pill Specific */
-  --bg-pill: #f4f4f5;
-  --bg-pill-hover: #e4e4e7;
-  --text-pill: #3f3f46;
-  --dot-pill: #d1d1d6;
+  --bg-pill: #f1f5f9;
+  --bg-pill-hover: #e2e8f0;
+  --text-pill: #334155;
+  --dot-pill: #94a3b8;
+  --pill-active-bg: rgba(37, 99, 235, 0.06);
+  --pill-active-bg-hover: rgba(37, 99, 235, 0.1);
+  --pill-active-border: rgba(37, 99, 235, 0.25);
+  --pill-active-text: #2563eb;
+  --pill-active-dot-ring: rgba(37, 99, 235, 0.15);
+
+  /* Section title */
+  --bg-section-title: rgba(37, 99, 235, 0.06);
 
   /* URL item Specific */
-  --bg-url-item: #f5f7fa;
-  --bg-url-item-hover: #ecf5ff;
+  --bg-url-item: #f8fafc;
+  --bg-url-item-hover: rgba(37, 99, 235, 0.05);
   --bg-qr: #fafafa;
 
-  --shadow-sm: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 16px 0 rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 8px 24px 0 rgba(0, 0, 0, 0.12);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
   --transition-speed: 0.2s;
 }
 
 :root.dark {
-  --primary-color: #38bdf8;
-  --primary-hover: #7dd3fc;
-  --primary-light: rgba(56, 189, 248, 0.1);
-  --bg-app: #090d16;
-  --bg-card: #131924;
-  --bg-glass: rgba(19, 25, 36, 0.85);
-  --border-color: #222b3c;
+  --primary-color: #3b82f6;
+  --primary-hover: #60a5fa;
+  --primary-light: rgba(59, 130, 246, 0.1);
+  --bg-app: #080c14;
+  --bg-card: #0f172a;
+  --bg-glass: rgba(15, 23, 42, 0.8);
+  --border-color: #1e293b;
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
   --text-hint: #475569;
@@ -411,17 +482,25 @@ onUnmounted(() => {
   /* Pill Specific */
   --bg-pill: #1e293b;
   --bg-pill-hover: #334155;
-  --text-pill: #e2e8f0;
+  --text-pill: #cbd5e1;
   --dot-pill: #475569;
+  --pill-active-bg: rgba(59, 130, 246, 0.1);
+  --pill-active-bg-hover: rgba(59, 130, 246, 0.15);
+  --pill-active-border: rgba(59, 130, 246, 0.3);
+  --pill-active-text: #60a5fa;
+  --pill-active-dot-ring: rgba(59, 130, 246, 0.15);
+
+  /* Section title */
+  --bg-section-title: rgba(59, 130, 246, 0.08);
 
   /* URL item Specific */
   --bg-url-item: #1e293b;
-  --bg-url-item-hover: rgba(56, 189, 248, 0.15);
+  --bg-url-item-hover: rgba(59, 130, 246, 0.12);
   --bg-qr: #1e293b;
 
-  --shadow-sm: 0 2px 12px 0 rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 16px 0 rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 24px 0 rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
 }
 
 html, body {
@@ -479,11 +558,28 @@ html, body {
   opacity: 1;
 }
 
-.form-item-hint {
-  font-size: 11px;
-  line-height: 1.4;
+.settings-form {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 8px;
+  align-items: center;
+  padding: 10px 0;
+}
+
+.settings-label {
+  font-size: 13px;
   color: var(--text-muted);
-  margin-top: 6px;
+  font-weight: 500;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.settings-hint {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1.5;
 }
 
 .form-row {
@@ -506,6 +602,99 @@ html, body {
   flex: 1;
   min-width: 0;
 }
+
+.about-content-modern {
+  background: var(--bg-card);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-lg);
+  box-sizing: border-box;
+}
+
+.about-header-modern {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 24px 20px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-color);
+  position: relative;
+}
+
+.about-icon-box {
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  background: var(--primary-light);
+  color: var(--primary-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+}
+
+:root.dark .about-icon-box {
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.about-app-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.about-name-modern {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0 0 8px;
+  cursor: pointer;
+  letter-spacing: -0.02em;
+  transition: color var(--transition-speed) ease;
+}
+
+.about-name-modern:hover {
+  color: var(--primary-color);
+}
+
+.about-body-modern {
+  text-align: center;
+  padding: 20px 24px;
+}
+
+.about-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0 0 10px;
+}
+
+.about-based {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.about-link {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.about-link:hover {
+  text-decoration: underline;
+}
+
+.about-footer-modern {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 24px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-app);
+  box-sizing: border-box;
+}
 </style>
 
 <style scoped>
@@ -523,9 +712,11 @@ html, body {
   align-items: center;
   justify-content: space-between;
   padding: 10px 20px;
-  background: var(--bg-card);
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border-color);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
   z-index: 10;
   transition: background-color var(--transition-speed) ease, border-color var(--transition-speed) ease;
 }
@@ -541,41 +732,27 @@ html, body {
   gap: 8px;
 }
 
-.btn-start {
-  --n-color: #67c23a !important;
-  --n-color-hover: #85ce61 !important;
-  --n-border: #67c23a !important;
-  --n-border-hover: #85ce61 !important;
-  --n-text-color: #fff !important;
-  --n-text-color-hover: #fff !important;
+.btn-start, .btn-stop {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  font-weight: 500 !important;
 }
 
-.btn-stop {
-  --n-color: #f56c6c !important;
-  --n-color-hover: #f78989 !important;
-  --n-border: #f56c6c !important;
-  --n-border-hover: #f78989 !important;
-  --n-text-color: #fff !important;
-  --n-text-color-hover: #fff !important;
+.btn-start:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.12);
 }
 
-/* Dark mode overrides for start/stop buttons to prevent excessive brightness */
-:root.dark .btn-start {
-  --n-color: rgba(16, 185, 129, 0.15) !important;
-  --n-color-hover: rgba(16, 185, 129, 0.25) !important;
-  --n-border: rgba(16, 185, 129, 0.3) !important;
-  --n-border-hover: rgba(16, 185, 129, 0.5) !important;
-  --n-text-color: #34d399 !important;
-  --n-text-color-hover: #34d399 !important;
+.btn-start:active {
+  transform: translateY(0) scale(0.97);
 }
 
-:root.dark .btn-stop {
-  --n-color: rgba(244, 63, 94, 0.15) !important;
-  --n-color-hover: rgba(244, 63, 94, 0.25) !important;
-  --n-border: rgba(244, 63, 94, 0.3) !important;
-  --n-border-hover: rgba(244, 63, 94, 0.5) !important;
-  --n-text-color: #fb7185 !important;
-  --n-text-color-hover: #fb7185 !important;
+.btn-stop:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(244, 63, 94, 0.12);
+}
+
+.btn-stop:active {
+  transform: translateY(0) scale(0.97);
 }
 
 .header-actions {
@@ -619,132 +796,4 @@ html, body {
   min-height: 0;
 }
 
-.about-modal :deep(.n-card__content) {
-  padding: 0 !important;
-}
-
-.about-modal :deep(.n-card__footer) {
-  padding: 12px 20px !important;
-  border-top: 1px solid var(--border-color);
-  display: block !important;
-  visibility: visible !important;
-}
-
-.about-content {
-  background: var(--bg-card);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: var(--shadow-lg);
-  box-sizing: border-box;
-}
-
-.about-banner {
-  text-align: center;
-  padding: 40px 24px 32px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  position: relative;
-  overflow: hidden;
-}
-
-:root.dark .about-banner {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border-bottom: 1px solid var(--border-color);
-}
-
-.about-banner::before {
-  content: "";
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
-  animation: banner-glow 8s infinite linear;
-  pointer-events: none;
-}
-
-.about-banner::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 60px;
-  background: linear-gradient(to top, rgba(0,0,0,0.1), transparent);
-  pointer-events: none;
-}
-
-.about-name,
-.about-banner .n-tag {
-  position: relative;
-  z-index: 2;
-}
-
-@keyframes banner-glow {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.about-name {
-  color: #fff;
-  font-size: 24px;
-  font-weight: 800;
-  margin: 0 0 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-  letter-spacing: 1px;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-}
-
-.about-name:hover {
-  opacity: 0.9;
-  transform: scale(1.02);
-}
-
-.about-banner .n-tag {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255,255,255,0.3);
-  font-weight: 500;
-}
-
-.about-body {
-  text-align: center;
-  padding: 28px 24px 20px;
-}
-
-.about-desc {
-  font-size: 14px;
-  color: var(--text-main);
-  line-height: 1.7;
-  margin: 0 0 16px;
-  font-weight: 400;
-}
-
-.about-based {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin: 0;
-}
-
-.about-link {
-  color: var(--primary-color);
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.about-link:hover {
-  text-decoration: underline;
-}
-
-.about-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 24px;
-  border-top: 1px solid var(--border-color);
-  background: var(--bg-app);
-  box-sizing: border-box;
-}
 </style>

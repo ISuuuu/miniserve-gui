@@ -135,30 +135,45 @@ const featureDescriptions: Record<string, string> = {
 
 <style scoped>
 .config-panel {
-  width: 300px;
+  width: 310px;
   min-width: 280px;
   background: var(--bg-card);
-  padding: 10px 12px 36px;
+  padding: 10px 14px 28px;
   overflow-y: auto;
   border-right: 1px solid var(--border-color);
   position: relative;
   transition: all var(--transition-speed) ease;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Section card wrapper */
+.config-panel > .section-title {
+  margin-top: 6px;
+  margin-bottom: 3px;
+}
+
+.config-panel > .section-title:first-child {
+  margin-top: 0;
 }
 
 .form-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
+  padding: 0 2px;
 }
 
 .form-label {
   flex-shrink: 0;
-  width: 90px;
-  font-size: 12px;
-  color: var(--text-muted);
+  width: 80px;
+  font-size: 13px;
+  color: var(--text-main);
   font-weight: 500;
   text-align: right;
+  letter-spacing: 0.02em;
 }
 
 .form-control {
@@ -171,33 +186,53 @@ const featureDescriptions: Record<string, string> = {
   gap: 6px;
 }
 
+/* Folder open button refinement */
+.path-row :deep(.n-button) {
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.path-row :deep(.n-button:hover) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
 .toggle-row {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin: 4px 0 8px;
-  padding-left: 98px;
+  margin: 4px 0 6px;
+  padding-left: 88px;
 }
 
 .two-col {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 4px 0 8px;
-  padding-left: 98px;
+  margin: 4px 0 6px;
+  padding-left: 88px;
 }
 
 .section-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 600;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
   color: var(--primary-color);
-  margin: 12px 0 8px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--border-color);
+  text-transform: uppercase;
+  margin: 14px 0 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--bg-section-title);
+  letter-spacing: 0.05em;
+  transition: all var(--transition-speed) ease;
+}
+
+.section-title :deep(.n-icon) {
+  color: var(--primary-color);
+  opacity: 0.85;
 }
 
 .feature-hint {
@@ -205,14 +240,26 @@ const featureDescriptions: Record<string, string> = {
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 8px 12px;
-  font-size: 11px;
+  padding: 6px 12px;
+  font-size: 10px;
   color: var(--text-muted);
   background: var(--bg-glass);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--border-color);
-  line-height: 1.4;
+  line-height: 1.5;
   z-index: 1;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all var(--transition-speed) ease;
+}
+
+/* Smooth hover effect on all form controls */
+.form-control :deep(.n-input:hover),
+.form-control :deep(.n-input-number:hover),
+.form-control :deep(.n-select:hover) {
+  transition: all 0.2s ease;
 }
 </style>

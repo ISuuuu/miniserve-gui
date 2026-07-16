@@ -79,19 +79,21 @@ function getLogClass(log: string) {
 }
 
 .log-box {
-  background: #1e1e1e;
-  color: #a5b4fc;
-  padding: 16px;
-  font-family: "Consolas", "Monaco", monospace;
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 16px 20px;
+  font-family: "Fira Code", "Consolas", "Monaco", monospace;
   font-size: 12px;
   line-height: 1.8;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
 }
 
 .log-line {
-  margin: 2px 0;
+  margin: 4px 0;
   white-space: pre-wrap;
   word-break: break-all;
 }
@@ -113,17 +115,18 @@ function getLogClass(log: string) {
 }
 
 .log-empty-prompt {
-  color: #666;
+  color: #475569;
 }
 
 .prompt-symbol {
-  color: #818cf8;
+  color: #6366f1;
   margin-right: 8px;
   font-weight: 600;
 }
 
 .cursor-blink {
   color: #34d399;
+  text-shadow: 0 0 6px rgba(52, 211, 153, 0.6);
   animation: blink 1s step-end infinite;
   margin-left: 2px;
 }

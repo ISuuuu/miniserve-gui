@@ -54,7 +54,7 @@ export default {
     readme: 'README',
     hidden: '显示点文件',
     githubProxy: 'GitHub 下载代理',
-    githubProxyTooltip: '用于加速从 GitHub 下载 miniserve 引擎及软件版本更新，支持本地 HTTP/HTTPS 代理或在线镜像加速网关。',
+    githubProxyTooltip: '加速 GitHub 下载引擎及更新，支持 HTTP/HTTPS 代理或镜像网关。',
     githubProxyPlaceholder: '留空则直连，例如 https://proxy.example.com/',
   },
   features: {

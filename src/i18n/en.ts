@@ -54,7 +54,7 @@ export default {
     readme: 'README',
     hidden: 'Show Hidden',
     githubProxy: 'GitHub Download Proxy',
-    githubProxyTooltip: 'Used to accelerate downloading the miniserve engine and app updates from GitHub. Supports local HTTP/HTTPS proxies or online mirror gateways.',
+    githubProxyTooltip: 'Speed up GitHub downloads for engine & updates. Supports HTTP/HTTPS proxy or mirror gateway.',
     githubProxyPlaceholder: 'Leave empty for direct, e.g. https://proxy.example.com/',
   },
   features: {
