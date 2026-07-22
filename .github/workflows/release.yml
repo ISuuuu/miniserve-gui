@@ -34,6 +34,41 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Generate Release Notes from Git
+        id: changelog
+        shell: bash
+        run: |
+          # 判断当前 HEAD 是否有 Tag
+          CURRENT_TAG=$(git tag --points-at HEAD 2>/dev/null | head -n 1)
+          if [ -n "$CURRENT_TAG" ]; then
+            PREV_TAG=$(git describe --tags --abbrev=0 "$CURRENT_TAG^" 2>/dev/null || echo "")
+          else
+            PREV_TAG=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || echo "")
+          fi
+
+          if [ -n "$PREV_TAG" ]; then
+            echo "Generating changelog between $PREV_TAG and HEAD"
+            LOGS=$(git log "$PREV_TAG..HEAD" --oneline --no-merges --pretty=format:"- %s")
+          else
+            echo "No previous tag found, generating full log"
+            LOGS=$(git log --oneline --no-merges --pretty=format:"- %s")
+          fi
+
+          INPUT_BODY="${{ github.event.inputs.body }}"
+          if [ -n "$INPUT_BODY" ]; then
+            FINAL_BODY="$INPUT_BODY"
+          else
+            FINAL_BODY="$LOGS"
+          fi
+
+          {
+            echo "RELEASE_NOTES<<EOF"
+            echo "$FINAL_BODY"
+            echo "EOF"
+          } >> $GITHUB_ENV
 
       - name: Sync version to manifests
         shell: bash
@@ -115,7 +150,7 @@ jobs:
           updaterJsonPreferNsis: true
           tagName: ${{ github.event.inputs.version || github.ref_name }}
           releaseName: "miniserve-gui ${{ github.event.inputs.version || github.ref_name }}"
-          releaseBody: ${{ github.event.inputs.body }}
+          releaseBody: ${{ env.RELEASE_NOTES }}
           releaseDraft: false
           prerelease: false
 
@@ -160,28 +195,50 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
       - name: Generate and upload latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.event.inputs.version || github.ref_name }}
         run: |
+          # 提取 commit 日志作为 updater notes
+          CURRENT_TAG=$(git tag --points-at HEAD 2>/dev/null | head -n 1)
+          if [ -n "$CURRENT_TAG" ]; then
+            PREV_TAG=$(git describe --tags --abbrev=0 "$CURRENT_TAG^" 2>/dev/null || echo "")
+          else
+            PREV_TAG=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || echo "")
+          fi
+
+          if [ -n "$PREV_TAG" ]; then
+            NOTES=$(git log "$PREV_TAG..HEAD" --oneline --no-merges --pretty=format:"- %s")
+          else
+            NOTES=$(git log --oneline --no-merges --pretty=format:"- %s")
+          fi
+
+          # JSON 安全转义（换行转为 \n，双引号转义）
+          ESCAPED_NOTES=$(echo "$NOTES" | jq -sR .)
+
           # 下载所有 build 阶段已上传的 .sig 签名文件
           gh release download "$TAG" -p "*.sig" -R "${{ github.repository }}" || true
-          
+
           # 初始化 latest.json
           echo "{" > latest.json
           echo "  \"version\": \"$TAG\"," >> latest.json
-          echo "  \"notes\": \"Update to $TAG\"," >> latest.json
+          echo "  \"notes\": $ESCAPED_NOTES," >> latest.json
           echo "  \"pub_date\": \"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\"," >> latest.json
           echo "  \"platforms\": {" >> latest.json
-          
+
           first=true
           for sig_file in *.sig; do
             if [ "$sig_file" = "*.sig" ]; then break; fi
-            
+
             sig_content=$(cat "$sig_file")
             file_name="${sig_file%.sig}"
-            
+
             platform=""
             if [[ "$file_name" == *"-setup.exe" ]]; then
               platform="windows-x86_64"
@@ -190,26 +247,26 @@ jobs:
             else
                continue
             fi
-            
+
             url="https://github.com/${{ github.repository }}/releases/download/$TAG/$file_name"
-            
+
             if [ "$first" = true ]; then
               first=false
             else
               echo "    ," >> latest.json
             fi
-            
+
             echo "    \"$platform\": {" >> latest.json
             echo "      \"signature\": \"$sig_content\"," >> latest.json
             echo "      \"url\": \"$url\"" >> latest.json
             echo "    }" >> latest.json
           done
-          
+
           echo "  }" >> latest.json
           echo "}" >> latest.json
-          
+
           echo "Generated latest.json:"
           cat latest.json
-          
+
           # 统一覆盖上传最终版 latest.json
           gh release upload "$TAG" latest.json --clobber -R "${{ github.repository }}"
