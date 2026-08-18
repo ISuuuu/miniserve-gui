@@ -1,16 +1,54 @@
 import { ref } from "vue";
+import type { LogItem } from "../types";
 
 export function useLogs(maxLogs = 200) {
-  const logs = ref<string[]>([]);
+  const logs = ref<LogItem[]>([]);
+  let buffer: LogItem[] = [];
+  let flushTimer: ReturnType<typeof setTimeout> | null = null;
+  let nextId = 1;
+
+  function flushLogs() {
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+    if (buffer.length === 0) return;
+
+    const merged = logs.value.concat(buffer);
+    buffer = [];
+    if (merged.length > maxLogs) {
+      logs.value = merged.slice(-maxLogs);
+    } else {
+      logs.value = merged;
+    }
+  }
 
   function addLog(msg: string) {
-    logs.value.push(msg);
-    if (logs.value.length > maxLogs) logs.value.shift();
+    buffer.push({
+      id: nextId++,
+      text: msg,
+    });
+    if (!flushTimer) {
+      flushTimer = setTimeout(flushLogs, 50);
+    }
   }
 
   function clearLogs() {
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+    buffer = [];
     logs.value = [];
   }
 
-  return { logs, addLog, clearLogs };
+  function cleanup() {
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+    buffer = [];
+  }
+
+  return { logs, addLog, clearLogs, cleanup };
 }

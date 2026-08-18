@@ -47,7 +47,10 @@ export function useServer(
         logs.addLog(t("messages.serviceStarted", { urls: urlsToShow.join(", ") }));
         message.success(t("messages.serviceStarted", { urls: "" }));
         serverUrls.value = urlsToShow;
-        await generateQrCodes(urlsToShow);
+        // Background async QR generation to avoid delaying start completion
+        generateQrCodes(urlsToShow).catch((e) => {
+          console.error("Failed to generate QR codes:", e);
+        });
       }
     } catch (e) {
       logs.addLog(t("messages.startFailed", { error: e }));

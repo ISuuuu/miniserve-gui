@@ -1,10 +1,9 @@
 use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Write as IoWrite};
+use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 
-use futures_util::StreamExt;
 use log::info;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
@@ -41,12 +40,82 @@ fn apply_proxy(proxy_prefix: &str, url: &str) -> Option<String> {
     }
 }
 
-/// Build a reqwest::Client with proxy support.
+/// Build a reqwest::Client for API/metadata requests with timeouts.
 fn build_http_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .user_agent("miniserve-gui-downloader")
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(15))
         .build()
         .map_err(|e| e.to_string())
+}
+
+/// Build a reqwest::Client for streaming large downloads. No total request timeout,
+/// since `stream_response_to_file` already enforces a per-chunk inactivity timeout.
+fn build_download_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .user_agent("miniserve-gui-downloader")
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| e.to_string())
+}
+
+/// Stream body chunks with a per-chunk inactivity timeout (30 seconds)
+/// to avoid hanging indefinitely if the remote server stalls.
+async fn stream_response_to_file<F>(
+    response: reqwest::Response,
+    mut file: std::fs::File,
+    mut on_chunk: F,
+) -> Result<u64, String>
+where
+    F: FnMut(&[u8], u64, u64),
+{
+    use futures_util::StreamExt;
+    use std::io::Write;
+    use tokio::time::{timeout, Duration};
+
+    let total_size = response.content_length().unwrap_or(0);
+    let mut downloaded: u64 = 0;
+    let mut stream = response.bytes_stream();
+    let chunk_timeout = Duration::from_secs(30);
+
+    loop {
+        let next_item = match timeout(chunk_timeout, stream.next()).await {
+            Ok(Some(item)) => item,
+            Ok(None) => break, // EOF
+            Err(_) => {
+                return Err("DOWNLOAD_TIMEOUT:下载数据流读取超时 (30s 无响应)".to_string());
+            }
+        };
+
+        let chunk = next_item.map_err(|e| format!("DOWNLOAD_CHUNK_FAILED:{}", e))?;
+        file.write_all(&chunk)
+            .map_err(|e| format!("FILE_WRITE_FAILED:{}", e))?;
+        downloaded += chunk.len() as u64;
+
+        on_chunk(&chunk, downloaded, total_size);
+    }
+
+    file.flush()
+        .map_err(|e| format!("FILE_FLUSH_FAILED:{}", e))?;
+    Ok(downloaded)
+}
+
+/// Send a GET request, optionally bounding only the wait for response headers
+/// (downloads stream the body to file afterwards, where per-chunk timeouts apply).
+async fn send_for_header(
+    client: &reqwest::Client,
+    url: &str,
+    header_timeout: Option<std::time::Duration>,
+) -> Result<reqwest::Response, String> {
+    let fut = client.get(url).send();
+    match header_timeout {
+        Some(d) => tokio::time::timeout(d, fut)
+            .await
+            .map_err(|_| "HEADER_TIMEOUT:等待响应头超时 (30s)".to_string())
+            .and_then(|r| r.map_err(|e| format!("NETWORK_ERROR:{}", e))),
+        None => fut.await.map_err(|e| format!("NETWORK_ERROR:{}", e)),
+    }
 }
 
 /// Fetch with proxy fallback: try direct first, then proxy if it fails.
@@ -54,18 +123,38 @@ async fn fetch_with_proxy(
     client: &reqwest::Client,
     direct_url: &str,
     proxy_url: Option<&str>,
+    header_timeout: Option<std::time::Duration>,
 ) -> Result<reqwest::Response, String> {
-    match client.get(direct_url).send().await {
+    match send_for_header(client, direct_url, header_timeout).await {
         Ok(resp) if resp.status().is_success() => Ok(resp),
-        _ => {
+        direct_res => {
             if let Some(proxy) = proxy_url {
-                info!("直连失败，尝试使用代理: {}", proxy);
-                client.get(proxy).send().await.map_err(|e| format!("PROXY_FAILED:{}", e))
+                info!("直连失败 ({:?})，尝试使用代理: {}", direct_res.as_ref().err(), proxy);
+                send_for_header(client, proxy, header_timeout)
+                    .await
+                    .map_err(|e| format!("PROXY_FAILED:{}", e))
             } else {
-                Err("PROXY_NOT_CONFIGURED".into())
+                match direct_res {
+                    Ok(resp) => Err(format!("HTTP_ERROR:{}", resp.status())),
+                    Err(e) => Err(e),
+                }
             }
         }
     }
+}
+
+/// 检查目标主机端口是否已监听（单次连接 300ms 超时）。
+fn is_port_listening(host: &str, port: u16) -> bool {
+    use std::net::{TcpStream, ToSocketAddrs};
+    use std::time::Duration;
+
+    let Ok(addrs) = (host, port).to_socket_addrs() else {
+        return false;
+    };
+    addrs
+        .filter_map(|a| TcpStream::connect_timeout(&a, Duration::from_millis(300)).ok())
+        .next()
+        .is_some()
 }
 
 // ============ Tauri Commands ============
@@ -119,7 +208,7 @@ pub async fn download_engine(
     let proxy_api_url = apply_proxy(&proxy_prefix, api_url);
 
     // Fetch latest release
-    let response = fetch_with_proxy(&client, api_url, proxy_api_url.as_deref()).await?;
+    let response = fetch_with_proxy(&client, api_url, proxy_api_url.as_deref(), None).await?;
     if !response.status().is_success() {
         let err_text = response.text().await.unwrap_or_default();
         #[derive(Deserialize, Debug)]
@@ -164,30 +253,32 @@ pub async fn download_engine(
         .ok_or("No matching binary found")?;
 
     // Download binary with proxy fallback
+    let download_client = build_download_client()?;
     let proxy_download_url = apply_proxy(&proxy_prefix, &asset.browser_download_url);
-    let response = fetch_with_proxy(&client, &asset.browser_download_url, proxy_download_url.as_deref()).await?;
+    let response = fetch_with_proxy(&download_client, &asset.browser_download_url, proxy_download_url.as_deref(), Some(std::time::Duration::from_secs(30))).await?;
 
-    let total_size = response.content_length().unwrap_or(0);
     let bin_dir = get_engine_path().parent().unwrap().to_path_buf();
     fs::create_dir_all(&bin_dir).map_err(|e| e.to_string())?;
 
     let tmp_path = bin_dir.join("miniserve.tmp");
-    let mut file = File::create(&tmp_path).map_err(|e| e.to_string())?;
-    let mut downloaded: u64 = 0;
+    let file = File::create(&tmp_path).map_err(|e| e.to_string())?;
 
-    let mut stream = response.bytes_stream();
-    while let Some(item) = stream.next().await {
-        let chunk = item.map_err(|e| e.to_string())?;
-        file.write_all(&chunk).map_err(|e| e.to_string())?;
-        downloaded += chunk.len() as u64;
+    let mut last_emit = std::time::Instant::now();
+    let mut last_pct = 0.0;
+    let app_handle_download = app_handle.clone();
+
+    stream_response_to_file(response, file, move |_chunk, downloaded, total_size| {
         let pct = if total_size > 0 {
             (downloaded as f64 / total_size as f64) * 100.0
         } else {
             0.0
         };
-        let _ = app_handle.emit("download-progress", pct);
-    }
-    drop(file);
+        if last_emit.elapsed().as_millis() >= 80 || (pct - last_pct).abs() >= 1.0 || (total_size > 0 && downloaded == total_size) {
+            last_emit = std::time::Instant::now();
+            last_pct = pct;
+            let _ = app_handle_download.emit("download-progress", pct);
+        }
+    }).await?;
 
     fs::rename(&tmp_path, &dest_path).map_err(|e| e.to_string())?;
 
@@ -291,10 +382,11 @@ pub async fn start_server(
     let stdout = child.stdout.take().map(|s| BufReader::new(s));
     let stderr = child.stderr.take().map(|s| BufReader::new(s));
 
-    // For capturing random route from stdout
+    // For capturing random route and start signal (explicit listening URL) from stdout
     let (tx_route, rx_route) = std::sync::mpsc::channel();
+    let (tx_started, rx_started) = std::sync::mpsc::channel();
 
-    // Log stdout in background and capture random route, emit to frontend
+    // Log stdout in background and capture random route / startup signal, emit to frontend
     let app_handle_clone = app_handle.clone();
     let engine_path_for_log = engine_path.clone();
     let args_for_log = args.clone();
@@ -306,10 +398,11 @@ pub async fn start_server(
                 let trimmed = line.trim();
                 log::info!("{}", trimmed);
                 let _ = app_handle_clone.emit("server-log", trimmed);
-                // Try to capture random route from output like:
-                // "http://192.168.6.133:8080/857613"
-                if capture_route {
-                    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+                // Miniserve outputs lines starting with "http://" or "https://" when it successfully starts listening.
+                // Examples: "http://127.0.0.1:8080" or "http://192.168.1.5:8080/random_path"
+                if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+                    let _ = tx_started.send(());
+                    if capture_route {
                         // Extract path part after port
                         let port_str = format!(":{}", target_port);
                         if let Some(port_pos) = trimmed.find(&port_str) {
@@ -335,11 +428,48 @@ pub async fn start_server(
         }
     });
 
-    // Wait briefly and check if process is still running
-    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+    // Poll for process readiness without blocking for a full fixed duration.
+    // Retain a safe maximum timeout (up to 1500ms for random route, 1000ms for standard)
+    // to allow miniserve sufficient time under high CPU load or complex routes,
+    // while returning immediately once the listening signal is received.
+    let start_time = std::time::Instant::now();
+    let max_wait = if config.random_route {
+        std::time::Duration::from_millis(1500)
+    } else {
+        std::time::Duration::from_millis(1000)
+    };
+
+    let mut random_route = None;
+    let mut started = false;
+    while start_time.elapsed() < max_wait {
+        if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
+            let cmd_str = std::iter::once(engine_path_for_log.to_string_lossy().to_string())
+                .chain(args_for_log)
+                .collect::<Vec<_>>()
+                .join(" ");
+            return Err(format!(
+                "miniserve 启动失败 (exit code: {:?})\n命令: {}\n请查看日志获取详细信息",
+                status.code(),
+                cmd_str
+            ));
+        }
+
+        if config.random_route {
+            if let Ok(route) = rx_route.try_recv() {
+                log::info!("[debug] received route: {:?}", route);
+                random_route = Some(route);
+                started = true;
+                break;
+            }
+        } else if rx_started.try_recv().is_ok() {
+            started = true;
+            break;
+        }
+
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
 
     if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
-        // Re-construct command string for error message
         let cmd_str = std::iter::once(engine_path_for_log.to_string_lossy().to_string())
             .chain(args_for_log)
             .collect::<Vec<_>>()
@@ -351,16 +481,29 @@ pub async fn start_server(
         ));
     }
 
-    let pid = child.id();
+    if config.random_route && random_route.is_none() {
+        if let Ok(route) = rx_route.try_recv() {
+            random_route = Some(route);
+        } else {
+            return Err("miniserve 启动超时：未能获取随机路由地址，请检查服务日志".to_string());
+        }
+    } else if !started && rx_started.try_recv().is_err() {
+        // Fallback: 进程存活但未解析到监听 URL，实际探测端口确认是否真的在监听，
+        // 避免在服务未就绪时误报“运行中”。
+        let probe_hosts: Vec<&str> = match config.interfaces.as_str() {
+            "0.0.0.0" | "::" | "localhost" => vec!["127.0.0.1", "::1"],
+            "127.0.0.1" | "::1" => vec![config.interfaces.as_str()],
+            s if s.contains(':') => vec![s.trim_start_matches('[').trim_end_matches(']')],
+            s => vec![s],
+        };
+        let port_open = probe_hosts.iter().any(|h| is_port_listening(h, config.port));
+        if !port_open {
+            return Err("miniserve 启动超时：未能确认端口已监听，请查看服务日志后重试".to_string());
+        }
+        log::warn!("miniserve 未在预期时间内输出监听 URL，但端口已确认监听，继续");
+    }
 
-    // 尝试获取随机路由（如果有的话）
-    let random_route = if config.random_route {
-        let route = rx_route.recv_timeout(std::time::Duration::from_millis(500)).ok();
-        log::info!("[debug] received route: {:?}", route);
-        route
-    } else {
-        None
-    };
+    let pid = child.id();
 
     // 生成所有可访问的 URL
     let route_suffix = random_route.clone().unwrap_or_default();
@@ -574,7 +717,7 @@ pub async fn fetch_update_manifest(
         None
     };
 
-    let response = fetch_with_proxy(&client, &url, proxy_url.as_deref()).await?;
+    let response = fetch_with_proxy(&client, &url, proxy_url.as_deref(), None).await?;
     if !response.status().is_success() {
         return Err(format!("MANIFEST_FETCH_FAILED:{}", response.status()));
     }
@@ -598,7 +741,7 @@ pub async fn download_and_install_update(
     }
 
     info!("开始下载更新 v{}: {}", version, url);
-    let client = build_http_client()?;
+    let client = build_download_client()?;
 
     let proxy_prefix = get_proxy_prefix(&app_handle).unwrap_or_default();
     let proxy_url = if !proxy_prefix.is_empty() {
@@ -608,34 +751,50 @@ pub async fn download_and_install_update(
     };
 
     info!("下载更新: {}", url);
-    let response = fetch_with_proxy(&client, &url, proxy_url.as_deref()).await?;
+    let response = fetch_with_proxy(&client, &url, proxy_url.as_deref(), Some(std::time::Duration::from_secs(30))).await?;
 
     if !response.status().is_success() {
         return Err(format!("DOWNLOAD_FAILED:HTTP {}", response.status()));
     }
 
-    // Stream download with progress events
-    let total_size = response.content_length().unwrap_or(0);
-    let mut downloaded: u64 = 0;
-    let mut all_bytes = Vec::new();
-    use futures_util::StreamExt;
+    // 使用随机临时文件名直接流式写入，防止大文件占用过多内存和符号链接攻击
+    let ext = std::path::Path::new(url.split('/').last().unwrap_or("update"))
+        .extension()
+        .unwrap_or(std::ffi::OsStr::new("exe"));
+    let temp_file = tempfile::Builder::new()
+        .prefix("miniserve-update-")
+        .suffix(&format!(".{}", ext.to_string_lossy()))
+        .tempfile_in(std::env::temp_dir())
+        .map_err(|e| format!("TEMP_FILE_FAILED:{}", e))?;
 
-    let mut stream = response.bytes_stream();
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("DOWNLOAD_CHUNK_FAILED:{}", e))?;
-        all_bytes.extend_from_slice(&chunk);
-        downloaded += chunk.len() as u64;
-        let _ = app_handle.emit("update-download-progress", serde_json::json!({
-            "downloaded": downloaded,
-            "total": total_size,
-        }));
-    }
+    // Stream download directly to temp file with per-chunk timeout and throttled progress events
+    let file = temp_file.reopen().map_err(|e| format!("TEMP_FILE_OPEN_FAILED:{}", e))?;
+    let mut last_emit = std::time::Instant::now();
+    let mut last_pct = 0.0;
+    let app_handle_download = app_handle.clone();
+
+    stream_response_to_file(response, file, move |_chunk, downloaded, total_size| {
+        let pct = if total_size > 0 {
+            (downloaded as f64 / total_size as f64) * 100.0
+        } else {
+            0.0
+        };
+        if last_emit.elapsed().as_millis() >= 80 || (pct - last_pct).abs() >= 1.0 || (total_size > 0 && downloaded == total_size) {
+            last_emit = std::time::Instant::now();
+            last_pct = pct;
+            let _ = app_handle_download.emit("update-download-progress", serde_json::json!({
+                "downloaded": downloaded,
+                "total": total_size,
+            }));
+        }
+    }).await?;
 
     // Verify signature
     if !signature.is_empty() {
         match get_updater_pubkey(&app_handle) {
             Ok(pubkey) => {
-                verify_signature(&all_bytes, &signature, &pubkey)?;
+                let file_bytes = fs::read(temp_file.path()).map_err(|e| format!("READ_TEMP_FAILED:{}", e))?;
+                verify_signature(&file_bytes, &signature, &pubkey)?;
                 info!("签名验证通过");
             }
             Err(e) => {
@@ -646,17 +805,6 @@ pub async fn download_and_install_update(
         return Err("SIGNATURE_MISSING".into());
     }
 
-    // 使用随机临时文件名，防止符号链接攻击
-    let ext = std::path::Path::new(url.split('/').last().unwrap_or("update"))
-        .extension()
-        .unwrap_or(std::ffi::OsStr::new("exe"));
-    let mut temp_file = tempfile::Builder::new()
-        .prefix("miniserve-update-")
-        .suffix(&format!(".{}", ext.to_string_lossy()))
-        .tempfile_in(std::env::temp_dir())
-        .map_err(|e| format!("TEMP_FILE_FAILED:{}", e))?;
-    use std::io::Write;
-    temp_file.write_all(&all_bytes).map_err(|e| e.to_string())?;
     let temp_path = temp_file.into_temp_path();
     info!("更新已下载到: {:?}", temp_path);
 

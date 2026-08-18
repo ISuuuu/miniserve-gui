@@ -185,36 +185,45 @@ onMounted(async () => {
     console.error("Failed to show window:", e);
   }
 
-  try {
-    appVersion.value = await getVersion();
-  } catch (e) {
-    console.warn("无法获取 Tauri 版本", e);
-  }
+  // 1. 优先安全注册事件监听器，单项失败不阻断后续生命周期
+  const safeListen = async <T>(event: string, handler: (e: { payload: T }) => void) => {
+    try {
+      const unlisten = await listen<T>(event, handler);
+      unlistenFns.push(unlisten);
+    } catch (e) {
+      console.error(`Failed to register listener for ${event}:`, e);
+    }
+  };
 
-  await engineModule.checkEngine();
-  await configModule.loadConfig();
+  await safeListen<number>("download-progress", (event) => {
+    engineModule.progress.value = event.payload;
+  });
 
-  unlistenFns.push(
-    await listen<number>("download-progress", (event) => {
-      engineModule.progress.value = event.payload;
-    }),
-  );
+  await safeListen("server-started", (event) => {
+    logsModule.addLog("Server event: " + JSON.stringify(event.payload));
+  });
 
-  unlistenFns.push(
-    await listen("server-started", (event) => {
-      logsModule.addLog("Server event: " + JSON.stringify(event.payload));
-    }),
-  );
+  await safeListen<string>("server-log", (event) => {
+    logsModule.addLog(event.payload);
+  });
 
-  unlistenFns.push(
-    await listen<string>("server-log", (event) => {
-      logsModule.addLog(event.payload);
-    }),
-  );
+  // 2. 并行执行相互独立的初始化请求
+  await Promise.allSettled([
+    (async () => {
+      try {
+        appVersion.value = await getVersion();
+      } catch (e) {
+        console.warn("无法获取 Tauri 版本", e);
+      }
+    })(),
+    engineModule.checkEngine(),
+    configModule.loadConfig(),
+  ]);
 });
 
 onUnmounted(() => {
   configModule.cleanup();
+  logsModule.cleanup();
   copyTimers.forEach((timer) => clearTimeout(timer));
   copyTimers.clear();
   unlistenFns.forEach((fn) => fn());

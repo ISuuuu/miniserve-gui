@@ -41,4 +41,14 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "naive-ui": ["naive-ui"],
+          "vue-vendor": ["vue", "vue-i18n"],
+        },
+      },
+    },
+  },
 }));

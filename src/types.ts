@@ -34,3 +34,8 @@ export interface EngineStatus {
 export interface QrResponse {
   data: string;
 }
+
+export interface LogItem {
+  id: number;
+  text: string;
+}

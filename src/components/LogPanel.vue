@@ -2,9 +2,10 @@
 import { DocumentTextOutline } from "@vicons/ionicons5";
 import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import type { LogItem } from "@/types";
 
 const props = defineProps<{
-  logs: string[];
+  logs: LogItem[];
 }>();
 
 const emit = defineEmits<{
@@ -14,11 +15,11 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const logBoxRef = ref<HTMLElement | null>(null);
 
-watch(() => props.logs.length, () => {
+watch(() => props.logs, () => {
   if (logBoxRef.value) {
     logBoxRef.value.scrollTop = logBoxRef.value.scrollHeight;
   }
-}, { flush: 'post' });
+}, { flush: 'post', deep: false });
 
 function clearLogs() {
   emit("clearLogs");
@@ -44,7 +45,7 @@ function getLogClass(log: string) {
         <p class="log-empty-prompt"><span class="prompt-symbol">$</span> {{ t('log.empty') }}<span class="cursor-blink">▊</span></p>
       </template>
       <template v-else>
-        <p v-for="(log, i) in logs" :key="i" class="log-line" :class="getLogClass(log)">{{ log }}</p>
+        <p v-for="log in logs" :key="log.id" class="log-line" :class="getLogClass(log.text)">{{ log.text }}</p>
       </template>
     </div>
   </div>

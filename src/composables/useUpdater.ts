@@ -58,6 +58,10 @@ export function useUpdater(
       SIGNATURE_PARSE_FAILED: (d) => t("update.error.signatureParseFailed", { detail: d }),
       DOWNLOAD_CHUNK_FAILED: (d) => t("update.error.downloadChunkFailed", { detail: d }),
       TEMP_FILE_FAILED: (d) => t("update.error.tempFileFailed", { detail: d }),
+      TEMP_FILE_WRITE_FAILED: (d) => t("update.error.tempFileFailed", { detail: d }),
+      READ_TEMP_FAILED: (d) => t("update.error.tempFileFailed", { detail: d }),
+      NETWORK_ERROR: (d) => t("update.error.downloadFailed", { detail: d }),
+      HTTP_ERROR: (d) => t("update.error.downloadFailed", { detail: `HTTP ${d}` }),
       INSTALLER_LAUNCH_FAILED: (d) => t("update.error.installerLaunchFailed", { detail: d }),
       PKEXEC_FAILED: (d) => t("update.error.pkexecFailed", { detail: d }),
       APPIMAGE_RELAUNCH_FAILED: (d) => t("update.error.appimageRelaunchFailed", { detail: d }),
@@ -164,11 +168,6 @@ export function useUpdater(
                   (downloaded / totalSize) * 100,
                 );
               }
-              logs.addLog(
-                t("update.downloadProgress", {
-                  size: event.data.chunkLength,
-                }),
-              );
               break;
             case "Finished":
               updateProgress.value = 100;
