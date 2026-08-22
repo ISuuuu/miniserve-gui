@@ -42,6 +42,8 @@ export default defineConfig(async () => ({
     },
   },
   build: {
+    // Tauri WebView2/WebKitGTK 均为现代内核，跳过旧浏览器转译，产物更小
+    target: "chrome105",
     rollupOptions: {
       output: {
         manualChunks: {

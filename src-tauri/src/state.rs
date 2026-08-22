@@ -86,6 +86,8 @@ pub struct AppState {
     pub server_url: Mutex<Option<String>>,
     /// 防止并发启动：同一时间只允许一个 start_server 执行
     pub starting: AtomicBool,
+    /// 引擎版本缓存：避免每次 get_engine_status 都 spawn 子进程查询（下载引擎后失效）
+    pub engine_version_cache: Mutex<Option<String>>,
     #[cfg(windows)]
     pub job_handle: Mutex<Option<*mut std::ffi::c_void>>,
 }
@@ -102,6 +104,7 @@ impl Default for AppState {
             child: Mutex::new(None),
             server_url: Mutex::new(None),
             starting: AtomicBool::new(false),
+            engine_version_cache: Mutex::new(None),
             #[cfg(windows)]
             job_handle: Mutex::new(None),
         }

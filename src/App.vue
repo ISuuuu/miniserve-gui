@@ -185,7 +185,7 @@ onMounted(async () => {
     console.error("Failed to show window:", e);
   }
 
-  // 1. 优先安全注册事件监听器，单项失败不阻断后续生命周期
+  // 1. 并行注册事件监听器，单项失败不阻断后续生命周期
   const safeListen = async <T>(event: string, handler: (e: { payload: T }) => void) => {
     try {
       const unlisten = await listen<T>(event, handler);
@@ -195,17 +195,18 @@ onMounted(async () => {
     }
   };
 
-  await safeListen<number>("download-progress", (event) => {
-    engineModule.progress.value = event.payload;
-  });
-
-  await safeListen("server-started", (event) => {
-    logsModule.addLog("Server event: " + JSON.stringify(event.payload));
-  });
-
-  await safeListen<string>("server-log", (event) => {
-    logsModule.addLog(event.payload);
-  });
+  await Promise.all([
+    safeListen<number>("download-progress", (event) => {
+      engineModule.progress.value = event.payload;
+    }),
+    safeListen("server-started", (event) => {
+      logsModule.addLog("Server event: " + JSON.stringify(event.payload));
+    }),
+    // 后端日志为合批数组，一次性入队
+    safeListen<string[]>("server-log", (event) => {
+      logsModule.addLogs(event.payload);
+    }),
+  ]);
 
   // 2. 并行执行相互独立的初始化请求
   await Promise.allSettled([

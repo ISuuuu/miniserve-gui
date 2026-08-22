@@ -35,13 +35,13 @@ const colorSchemeOptions = computed(() => [
   { label: t('colorSchemes.monokai'), value: "monokai" },
 ]);
 
-const featureDescriptions: Record<string, string> = {
+const featureDescriptions = computed<Record<string, string>>(() => ({
   random_route: t('features.randomRoute'),
   webdav: t('features.webdav'),
   download: t('features.download'),
   readme: t('features.readme'),
   hidden: t('features.hidden'),
-};
+}));
 </script>
 
 <template>

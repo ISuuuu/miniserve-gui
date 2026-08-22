@@ -118,23 +118,28 @@ async fn send_for_header(
     }
 }
 
-/// Fetch with proxy fallback: try direct first, then proxy if it fails.
+/// Fetch with fallback: 配置了代理则优先走代理（用户配置代理通常因直连缓慢），
+/// 失败再回退直连；未配置代理时仅直连。
 async fn fetch_with_proxy(
     client: &reqwest::Client,
     direct_url: &str,
     proxy_url: Option<&str>,
     header_timeout: Option<std::time::Duration>,
 ) -> Result<reqwest::Response, String> {
-    match send_for_header(client, direct_url, header_timeout).await {
+    let (primary, fallback): (&str, Option<&str>) = match proxy_url {
+        Some(proxy) => (proxy, Some(direct_url)),
+        None => (direct_url, None),
+    };
+    match send_for_header(client, primary, header_timeout).await {
         Ok(resp) if resp.status().is_success() => Ok(resp),
-        direct_res => {
-            if let Some(proxy) = proxy_url {
-                info!("直连失败 ({:?})，尝试使用代理: {}", direct_res.as_ref().err(), proxy);
-                send_for_header(client, proxy, header_timeout)
+        res => {
+            if let Some(fallback_url) = fallback {
+                info!("首选通道失败 ({:?})，回退到直连: {}", res.as_ref().err(), fallback_url);
+                send_for_header(client, fallback_url, header_timeout)
                     .await
-                    .map_err(|e| format!("PROXY_FAILED:{}", e))
+                    .map_err(|e| format!("NETWORK_ERROR:{}", e))
             } else {
-                match direct_res {
+                match res {
                     Ok(resp) => Err(format!("HTTP_ERROR:{}", resp.status())),
                     Err(e) => Err(e),
                 }
@@ -160,11 +165,33 @@ fn is_port_listening(host: &str, port: u16) -> bool {
 // ============ Tauri Commands ============
 
 #[tauri::command]
-pub async fn get_engine_status() -> Result<EngineStatus, String> {
+pub async fn get_engine_status(state: State<'_, AppState>) -> Result<EngineStatus, String> {
     let path = get_engine_path();
     let exists = path.exists();
     let version = if exists {
-        get_engine_version(&path)
+        // 命中缓存则不再 spawn 子进程查询版本（锁在 await 前释放）
+        let cached = {
+            let cache_guard = state
+                .engine_version_cache
+                .lock()
+                .map_err(|e| e.to_string())?;
+            cache_guard.clone()
+        };
+        if let Some(cached) = cached {
+            Some(cached)
+        } else {
+            let probe_path = path.clone();
+            let v = tokio::task::spawn_blocking(move || get_engine_version(&probe_path))
+                .await
+                .map_err(|e| e.to_string())?;
+            // 只缓存成功读取到的版本，失败下次重试
+            if let Some(ver) = v.clone() {
+                if let Ok(mut cache) = state.engine_version_cache.lock() {
+                    *cache = Some(ver);
+                }
+            }
+            v
+        }
     } else {
         None
     };
@@ -282,6 +309,11 @@ pub async fn download_engine(
 
     fs::rename(&tmp_path, &dest_path).map_err(|e| e.to_string())?;
 
+    // 引擎已更新，清除版本缓存供下次查询
+    if let Ok(mut cache) = state.engine_version_cache.lock() {
+        *cache = None;
+    }
+
     #[cfg(not(windows))]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -386,8 +418,12 @@ pub async fn start_server(
     let (tx_route, rx_route) = std::sync::mpsc::channel();
     let (tx_started, rx_started) = std::sync::mpsc::channel();
 
-    // Log stdout in background and capture random route / startup signal, emit to frontend
-    let app_handle_clone = app_handle.clone();
+    // 日志合批：reader 线程只投递到 channel，由聚合线程每 100ms 批量 emit 一次，
+    // 避免 miniserve (-v) 高流量访问时逐行 IPC 事件拖慢前端
+    let (tx_log, rx_log) = std::sync::mpsc::channel::<String>();
+    let tx_log_stderr = tx_log.clone();
+
+    // Log stdout in background and capture random route / startup signal, send to aggregator
     let engine_path_for_log = engine_path.clone();
     let args_for_log = args.clone();
     let capture_route = config.random_route;
@@ -397,7 +433,7 @@ pub async fn start_server(
             for line in stdout.lines().map_while(Result::ok) {
                 let trimmed = line.trim();
                 log::info!("{}", trimmed);
-                let _ = app_handle_clone.emit("server-log", trimmed);
+                let _ = tx_log.send(trimmed.to_string());
                 // Miniserve outputs lines starting with "http://" or "https://" when it successfully starts listening.
                 // Examples: "http://127.0.0.1:8080" or "http://192.168.1.5:8080/random_path"
                 if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
@@ -417,13 +453,31 @@ pub async fn start_server(
         }
     });
 
-    // Log stderr in background, emit to frontend
-    let app_handle_clone2 = app_handle.clone();
+    // Log stderr in background, send to aggregator
     thread::spawn(move || {
         if let Some(stderr) = stderr {
             for line in stderr.lines().map_while(Result::ok) {
                 log::warn!("{}", line);
-                let _ = app_handle_clone2.emit("server-log", line.trim());
+                let _ = tx_log_stderr.send(line.trim().to_string());
+            }
+        }
+    });
+
+    // Aggregator: batch log lines, emit every 100ms; exits when both readers finish
+    let app_handle_logs = app_handle.clone();
+    thread::spawn(move || {
+        const FLUSH_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+        loop {
+            match rx_log.recv_timeout(FLUSH_INTERVAL) {
+                Ok(first) => {
+                    let mut batch = vec![first];
+                    while let Ok(line) = rx_log.try_recv() {
+                        batch.push(line);
+                    }
+                    let _ = app_handle_logs.emit("server-log", &batch);
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
             }
         }
     });
@@ -575,8 +629,9 @@ pub async fn get_server_status(state: State<'_, AppState>) -> Result<ServerStatu
     })
 }
 
-#[tauri::command]
-pub async fn generate_qr(data: String) -> Result<QrCodeResponse, String> {
+// async：QR/PNG 编码是 CPU 密集操作，避免同步命令阻塞主线程
+#[tauri::command(async)]
+pub fn generate_qr(data: String) -> Result<QrCodeResponse, String> {
     use qrcode::QrCode;
     use image::Luma;
 

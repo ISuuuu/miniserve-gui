@@ -24,10 +24,17 @@ export function useLogs(maxLogs = 200) {
   }
 
   function addLog(msg: string) {
-    buffer.push({
-      id: nextId++,
-      text: msg,
-    });
+    addLogs([msg]);
+  }
+
+  function addLogs(msgs: string[]) {
+    if (msgs.length === 0) return;
+    for (const msg of msgs) {
+      buffer.push({
+        id: nextId++,
+        text: msg,
+      });
+    }
     if (!flushTimer) {
       flushTimer = setTimeout(flushLogs, 50);
     }
@@ -50,5 +57,5 @@ export function useLogs(maxLogs = 200) {
     buffer = [];
   }
 
-  return { logs, addLog, clearLogs, cleanup };
+  return { logs, addLog, addLogs, clearLogs, cleanup };
 }
