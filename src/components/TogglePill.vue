@@ -28,8 +28,8 @@ defineEmits<{
 .toggle-pill {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 5px 12px;
+  gap: 6px;
+  padding: 4px 10px;
   border-radius: 10px;
   border: 1.5px solid transparent;
   background: var(--bg-pill);

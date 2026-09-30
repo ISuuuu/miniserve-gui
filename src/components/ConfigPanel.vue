@@ -135,10 +135,10 @@ const featureDescriptions = computed<Record<string, string>>(() => ({
 
 <style scoped>
 .config-panel {
-  width: 310px;
-  min-width: 280px;
+  width: 336px;
+  min-width: 336px;
   background: var(--bg-card);
-  padding: 10px 14px 28px;
+  padding: 10px 14px 34px;
   overflow-y: auto;
   border-right: 1px solid var(--border-color);
   position: relative;
@@ -168,12 +168,14 @@ const featureDescriptions = computed<Record<string, string>>(() => ({
 
 .form-label {
   flex-shrink: 0;
-  width: 88px;
+  width: 90px;
   font-size: 13px;
   color: var(--text-main);
   font-weight: 500;
   text-align: right;
   letter-spacing: 0.02em;
+  white-space: nowrap;
+  padding-top: 0;
 }
 
 .form-control {
@@ -203,7 +205,7 @@ const featureDescriptions = computed<Record<string, string>>(() => ({
   gap: 8px;
   flex-wrap: wrap;
   margin: 4px 0 6px;
-  padding-left: 96px;
+  padding-left: 98px;
 }
 
 .two-col {
@@ -211,7 +213,7 @@ const featureDescriptions = computed<Record<string, string>>(() => ({
   flex-wrap: wrap;
   gap: 8px;
   margin: 4px 0 6px;
-  padding-left: 96px;
+  padding-left: 98px;
 }
 
 .section-title {
