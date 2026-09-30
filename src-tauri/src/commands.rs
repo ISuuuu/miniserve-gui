@@ -996,3 +996,14 @@ pub fn show_window_command(app_handle: AppHandle) -> Result<(), String> {
     crate::show_window(&app_handle);
     Ok(())
 }
+
+#[tauri::command]
+pub fn update_tray_menu(
+    tray_state: State<'_, crate::TrayMenuState>,
+    show_text: String,
+    quit_text: String,
+) -> Result<(), String> {
+    tray_state.show_item.set_text(show_text).map_err(|e| e.to_string())?;
+    tray_state.quit_item.set_text(quit_text).map_err(|e| e.to_string())?;
+    Ok(())
+}

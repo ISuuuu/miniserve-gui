@@ -1,0 +1,124 @@
+# miniserve-gui
+
+[English](README.md) | 简体中文
+
+为 [miniserve](https://github.com/svenstaro/miniserve) 提供图形化界面客户端。
+
+![Screenshot](screenshot.png)
+
+## 功能特性
+
+- ✅ **引擎自动管理** - 自动检测/下载最新版本的 miniserve 二进制文件
+- ✅ **可视化配置** - 支持大部分 miniserve CLI 参数的图形化配置
+- ✅ **服务控制** - 一键启动/停止服务，实时显示服务状态
+- ✅ **二维码分享** - 生成二维码，移动端扫码即访问
+- ✅ **配置持久化** - 保存配置到本地，重启后自动加载
+- ✅ **多语言支持** - 自动检测系统语言（默认非中文环境使用英文），支持在设置中手动切换中/英文
+
+## 下载
+
+从 [Releases](https://github.com/ISuuuu/miniserve-gui/releases) 下载最新版本：
+
+| 平台        | 安装版                  | 便携版 (Portable)              |
+| ----------- | ----------------------- | ------------------------------ |
+| **Windows** | `.exe` (NSIS 安装包)    | `_portable_x64.exe` (单文件版) |
+| **Linux**   | `.deb` / `.rpm` (安装包) | `.AppImage` (通用便携版)       |
+
+## 支持的参数
+
+| 分类     | 参数               | 说明                                              |
+| -------- | ------------------ | ------------------------------------------------- |
+| 基础运行 | `PATH`             | 要分享的文件夹路径                                |
+|          | `-p, --port`       | 服务端口（默认 8080）                             |
+|          | `-i, --interfaces` | 绑定网卡（0.0.0.0 或 127.0.0.1）                  |
+| 安全控制 | `-a, --auth`       | 用户名:密码 认证                                  |
+|          | `-u, --upload`     | 允许访客上传文件                                  |
+|          | `-u -U`            | 允许创建目录                                      |
+| 界面展示 | `--color-scheme`   | 配色主题（squirrel, archlinux, zenburn, monokai） |
+|          | `--title`          | 网页标题                                          |
+| 高级进阶 | `-H, --hidden`     | 显示点开头的文件                                  |
+|          | `--random-route`   | 随机路径                                          |
+|          | `--readme`         | 自动渲染 README                                   |
+|          | `-z`               | 一键打包下载                                      |
+|          | `--enable-webdav`  | 启用 WebDAV 支持                                  |
+
+## 技术栈
+
+- **前端**: Vue 3 (Composition API) + TypeScript + Vite + Naive UI + vue-i18n
+- **后端**: Tauri 2 (Rust)
+- **引擎**: [miniserve](https://github.com/svenstaro/miniserve)
+
+## 项目结构
+
+```
+├── src/                        # 前端源码
+│   ├── App.vue                # 主组件（编排 composables）
+│   ├── main.ts                # Vue 入口
+│   ├── composables/
+│   │   ├── useEngine.ts       # 引擎管理（检查/下载）
+│   │   ├── useConfig.ts       # 配置加载/保存/自动保存
+│   │   ├── useServer.ts       # 服务启停/状态管理
+│   │   ├── useLogs.ts         # 日志管理
+│   │   ├── useQr.ts           # 二维码生成
+│   │   └── useUpdater.ts      # 自动更新
+│   ├── components/
+│   │   ├── ConfigPanel.vue    # 配置面板
+│   │   ├── TogglePill.vue     # 通用开关按钮
+│   │   ├── StatusCard.vue     # 服务状态卡片
+│   │   └── LogPanel.vue       # 运行日志面板
+│   └── i18n/
+│       ├── index.ts           # i18n 配置
+│       ├── zh-CN.ts           # 中文语言包
+│       └── en.ts              # 英文语言包
+├── src-tauri/                  # Rust 后端
+│   ├── src/
+│   │   ├── lib.rs             # 模块声明、Job Object、托盘、入口
+│   │   ├── main.rs            # 程序入口
+│   │   ├── commands.rs        # Tauri commands
+│   │   ├── state.rs           # 状态和类型定义
+│   │   └── utils.rs           # 辅助函数、参数构建、配置验证
+│   ├── Cargo.toml
+│   └── tauri.conf.json
+└── package.json
+```
+
+## 开发
+
+### 环境要求
+
+- Node.js 20+
+- pnpm 9+
+- Rust 1.77+
+- Windows / macOS / Linux
+
+### 安装依赖
+
+```bash
+pnpm install
+```
+
+### 开发模式
+
+```bash
+pnpm run tauri dev
+```
+
+### 构建发布
+
+```bash
+pnpm run tauri build
+```
+
+## 配置文件位置
+
+- **Windows**: `%LOCALAPPDATA%/miniserve-gui/bin/miniserve.exe`
+- **Linux/macOS**: `~/.local/share/miniserve-gui/bin/miniserve`
+
+配置 JSON:
+
+- **Windows**: `%APPDATA%/miniserve-gui/config.json`
+- **Linux/macOS**: `~/.config/miniserve-gui/config.json`
+
+## 许可证
+
+MIT

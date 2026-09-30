@@ -124,6 +124,36 @@ pub(crate) mod job_object {
 
 // ============ App Entry ============
 
+pub struct TrayMenuState {
+    pub show_item: MenuItem<tauri::Wry>,
+    pub quit_item: MenuItem<tauri::Wry>,
+}
+
+fn is_chinese_locale() -> bool {
+    if let Ok(lang) = std::env::var("LC_ALL")
+        .or_else(|_| std::env::var("LC_MESSAGES"))
+        .or_else(|_| std::env::var("LANG"))
+    {
+        if !lang.is_empty() {
+            return lang.to_lowercase().starts_with("zh");
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetUserDefaultUILanguage() -> u16;
+        }
+        let lang_id = unsafe { GetUserDefaultUILanguage() };
+        // Primary language ID 0x04 = LANG_CHINESE
+        return (lang_id & 0x3ff) == 0x04;
+    }
+
+    #[cfg(not(windows))]
+    false
+}
+
 pub fn show_window(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.unminimize();
@@ -162,9 +192,27 @@ pub fn run() {
         .manage(state::AppState::default())
         .setup(|app| {
             // 创建托盘菜单
-            let show_item = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            let is_zh = is_chinese_locale();
+            let show_item = MenuItem::with_id(
+                app,
+                "show",
+                if is_zh { "显示窗口" } else { "Show Window" },
+                true,
+                None::<&str>,
+            )?;
+            let quit_item = MenuItem::with_id(
+                app,
+                "quit",
+                if is_zh { "退出" } else { "Quit" },
+                true,
+                None::<&str>,
+            )?;
             let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+
+            app.manage(TrayMenuState {
+                show_item: show_item.clone(),
+                quit_item: quit_item.clone(),
+            });
 
             // 创建系统托盘
             let _tray = TrayIconBuilder::new()
@@ -224,6 +272,7 @@ pub fn run() {
             commands::download_and_install_update,
             commands::get_package_type,
             commands::show_window_command,
+            commands::update_tray_menu,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -168,7 +168,7 @@ const featureDescriptions = computed<Record<string, string>>(() => ({
 
 .form-label {
   flex-shrink: 0;
-  width: 80px;
+  width: 88px;
   font-size: 13px;
   color: var(--text-main);
   font-weight: 500;
@@ -203,7 +203,7 @@ const featureDescriptions = computed<Record<string, string>>(() => ({
   gap: 8px;
   flex-wrap: wrap;
   margin: 4px 0 6px;
-  padding-left: 88px;
+  padding-left: 96px;
 }
 
 .two-col {
@@ -211,7 +211,7 @@ const featureDescriptions = computed<Record<string, string>>(() => ({
   flex-wrap: wrap;
   gap: 8px;
   margin: 4px 0 6px;
-  padding-left: 88px;
+  padding-left: 96px;
 }
 
 .section-title {

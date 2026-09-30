@@ -1,119 +1,126 @@
-为[miniserve](https://github.com/svenstaro/miniserve) 提供图形化界面客户端。
+# miniserve-gui
+
+English | [简体中文](README_zh.md)
+
+A lightweight cross-platform desktop GUI client for [miniserve](https://github.com/svenstaro/miniserve).
 
 ![Screenshot](screenshot.png)
 
-## 功能特性
+## Features
 
-- ✅ **引擎自动管理** - 自动检测/下载最新版本的 miniserve 二进制文件
-- ✅ **可视化配置** - 支持大部分 miniserve CLI 参数的图形化配置
-- ✅ **服务控制** - 一键启动/停止服务，实时显示服务状态
-- ✅ **二维码分享** - 生成二维码，移动端扫码即访问
-- ✅ **配置持久化** - 保存配置到本地，重启后自动加载
+- ✅ **Automatic Engine Management** - Automatically detect, download, and update the latest `miniserve` binary
+- ✅ **Visual Configuration** - Configure common `miniserve` CLI options through an intuitive interface
+- ✅ **One-Click Service Control** - Start, restart, or stop the HTTP file server with real-time status and logs
+- ✅ **QR Code Sharing** - Instantly generate QR codes for LAN URLs so mobile devices can scan and access files
+- ✅ **Persistent Configuration** - Automatically save settings locally and restore them on startup
+- ✅ **Multi-Language Support** - Automatically uses English on non-Chinese locales (`LANG`/`LC_*`), with manual language switching (English / Simplified Chinese) in Settings
 
-## 下载
+## Download
 
-从 [Releases](https://github.com/ISuuuu/miniserve-gui/releases) 下载最新版本：
+Download the latest release from [Releases](https://github.com/ISuuuu/miniserve-gui/releases):
 
-| 平台        | 安装版                  | 便携版 (Portable)              |
-| ----------- | ----------------------- | ------------------------------ |
-| **Windows** | `.exe` (NSIS 安装包)    | `_portable_x64.exe` (单文件版) |
-| **Linux**   | `.deb` /`.rpm` (安装包) | `.AppImage` (通用便携版)       |
+| Platform    | Installer                        | Portable                              |
+| ----------- | -------------------------------- | ------------------------------------- |
+| **Windows** | `.exe` (NSIS Installer)          | `_portable_x64.exe` (Single Binary)   |
+| **Linux**   | `.deb` / `.rpm` (System Package) | `.AppImage` (Universal Portable)      |
 
-## 支持的参数
+## Supported Options
 
-| 分类     | 参数               | 说明                                              |
-| -------- | ------------------ | ------------------------------------------------- |
-| 基础运行 | `PATH`             | 要分享的文件夹路径                                |
-|          | `-p, --port`       | 服务端口（默认 8080）                             |
-|          | `-i, --interfaces` | 绑定网卡（0.0.0.0 或 127.0.0.1）                  |
-| 安全控制 | `-a, --auth`       | 用户名:密码 认证                                  |
-|          | `-u, --upload`     | 允许访客上传文件                                  |
-|          | ` -u -U`           | 允许创建目录                                      |
-| 界面展示 | `--color-scheme`   | 配色主题（squirrel, archlinux, zenburn, monokai） |
-|          | `--title`          | 网页标题                                          |
-| 高级进阶 | `-H, --hidden`     | 显示点开头的文件                                  |
-|          | `--random-route `  | 随机路径                                          |
-|          | `--readme `        | 自动渲染 README                                   |
-|          | `-z`               | 一键打包下载                                      |
-|          | `--enable-webdav`  | 启用 WebDAV 支持                                  |
+| Category | Flag               | Description                                                |
+| -------- | ------------------ | ---------------------------------------------------------- |
+| Basic    | `PATH`             | Directory path to serve                                    |
+|          | `-p, --port`       | Port to listen on (default `8080`)                         |
+|          | `-i, --interfaces` | Interface to bind (`0.0.0.0` / `::` or `127.0.0.1`)        |
+| Security | `-a, --auth`       | `username:password` HTTP authentication                    |
+|          | `-u, --upload`     | Allow visitors to upload files                             |
+|          | `-u -U`            | Allow creating directories                                 |
+| Display  | `--color-scheme`   | Theme (`squirrel`, `archlinux`, `zenburn`, `monokai`)      |
+|          | `--title`          | Custom page title                                          |
+| Advanced | `-H, --hidden`     | Show hidden files (dotfiles)                               |
+|          | `--random-route`   | Generate a random route suffix                             |
+|          | `--readme`         | Automatically render `README.md` in directories            |
+|          | `-z`               | Enable TAR/ZIP archive download for directories            |
+|          | `--enable-webdav`  | Enable WebDAV protocol support                             |
 
-## 技术栈
+## Tech Stack
 
-- **前端**: Vue 3 (Composition API) + TypeScript + Vite + Naive UI + vue-i18n
-- **后端**: Tauri 2 (Rust)
-- **引擎**: [miniserve](https://github.com/svenstaro/miniserve)
+- **Frontend**: Vue 3 (Composition API) + TypeScript + Vite + Naive UI + vue-i18n
+- **Backend**: Tauri 2 (Rust)
+- **Engine**: [miniserve](https://github.com/svenstaro/miniserve)
 
-## 项目结构
+## Project Structure
 
 ```
-├── src/                        # 前端源码
-│   ├── App.vue                # 主组件（编排 composables）
-│   ├── main.ts                # Vue 入口
+├── src/                        # Frontend source
+│   ├── App.vue                # Main component
+│   ├── main.ts                # Vue entry point
 │   ├── composables/
-│   │   ├── useEngine.ts       # 引擎管理（检查/下载）
-│   │   ├── useConfig.ts       # 配置加载/保存/自动保存
-│   │   ├── useServer.ts       # 服务启停/状态管理
-│   │   ├── useLogs.ts         # 日志管理
-│   │   ├── useQr.ts           # 二维码生成
-│   │   └── useUpdater.ts      # 自动更新
+│   │   ├── useEngine.ts       # Engine check and download
+│   │   ├── useConfig.ts       # Config persistence and auto-save
+│   │   ├── useServer.ts       # Server lifecycle and status
+│   │   ├── useLogs.ts         # Real-time log management
+│   │   ├── useQr.ts           # QR code generation
+│   │   └── useUpdater.ts      # Application auto-updater
 │   ├── components/
-│   │   ├── ConfigPanel.vue    # 配置面板
-│   │   ├── TogglePill.vue     # 通用开关按钮
-│   │   ├── StatusCard.vue     # 服务状态卡片
-│   │   └── LogPanel.vue       # 运行日志面板
+│   │   ├── ConfigPanel.vue    # Configuration sidebar
+│   │   ├── TogglePill.vue     # Feature toggle button
+│   │   ├── StatusCard.vue     # Server status & QR code card
+│   │   └── LogPanel.vue       # Live log viewer
 │   └── i18n/
-│       ├── index.ts           # i18n 配置
-│       ├── zh-CN.ts           # 中文语言包
-│       └── en.ts              # 英文语言包
-├── src-tauri/                  # Rust 后端
+│       ├── index.ts           # i18n setup & locale detection
+│       ├── zh-CN.ts           # Simplified Chinese locale
+│       └── en.ts              # English locale
+├── src-tauri/                  # Rust backend
 │   ├── src/
-│   │   ├── lib.rs             # 模块声明、Job Object、托盘、入口
-│   │   ├── main.rs            # 程序入口
-│   │   ├── commands.rs        # Tauri commands
-│   │   ├── state.rs           # 状态和类型定义
-│   │   └── utils.rs           # 辅助函数、参数构建、配置验证
+│   │   ├── lib.rs             # App setup, system tray, Windows Job Object
+│   │   ├── main.rs            # Binary entry point
+│   │   ├── commands.rs        # Tauri IPC commands
+│   │   ├── state.rs           # Application state and data structures
+│   │   └── utils.rs           # Helpers, CLI argument builder, validation
 │   ├── Cargo.toml
 │   └── tauri.conf.json
 └── package.json
 ```
 
-## 开发
+## Development
 
-### 环境要求
+### Prerequisites
 
 - Node.js 20+
 - pnpm 9+
 - Rust 1.77+
 - Windows / macOS / Linux
 
-### 安装依赖
+### Install Dependencies
 
 ```bash
 pnpm install
 ```
 
-### 开发模式
+### Run in Development Mode
 
 ```bash
 pnpm run tauri dev
 ```
 
-### 构建发布
+### Build for Production
 
 ```bash
 pnpm run tauri build
 ```
 
-## 配置文件位置
+## File Locations
+
+Engine binary:
 
 - **Windows**: `%LOCALAPPDATA%/miniserve-gui/bin/miniserve.exe`
 - **Linux/macOS**: `~/.local/share/miniserve-gui/bin/miniserve`
 
-配置 JSON:
+Configuration JSON:
 
 - **Windows**: `%APPDATA%/miniserve-gui/config.json`
 - **Linux/macOS**: `~/.config/miniserve-gui/config.json`
 
-## 许可证
+## License
 
 MIT

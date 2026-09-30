@@ -19,7 +19,13 @@ export default {
   },
   settings: {
     title: '设置',
+    language: '界面语言',
+    languageAuto: '跟随系统',
     close: '关闭',
+  },
+  tray: {
+    show: '显示窗口',
+    quit: '退出',
   },
   about: {
     title: '关于',

@@ -16,6 +16,7 @@ import {
 } from "@vicons/ionicons5";
 import { getVersion } from "@tauri-apps/api/app";
 import { useI18n } from "vue-i18n";
+import { getSavedLanguageSetting, resolveLocale, type LanguageSetting } from "./i18n";
 import ConfigPanel from "./components/ConfigPanel.vue";
 import StatusCard from "./components/StatusCard.vue";
 import LogPanel from "./components/LogPanel.vue";
@@ -25,7 +26,33 @@ import { useConfig } from "./composables/useConfig";
 import { useServer } from "./composables/useServer";
 import { useUpdater } from "./composables/useUpdater";
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
+
+const currentLanguageSetting = ref<LanguageSetting>(getSavedLanguageSetting());
+
+const languageOptions = computed(() => [
+  { label: t("settings.languageAuto"), value: "auto" },
+  { label: "简体中文", value: "zh-CN" },
+  { label: "English", value: "en" },
+]);
+
+async function updateTray() {
+  try {
+    await invoke("update_tray_menu", {
+      showText: t("tray.show"),
+      quitText: t("tray.quit"),
+    });
+  } catch (e) {
+    console.error("Failed to update tray menu:", e);
+  }
+}
+
+async function onLanguageChange(val: LanguageSetting) {
+  currentLanguageSetting.value = val;
+  localStorage.setItem("language", val);
+  locale.value = resolveLocale(val);
+  await updateTray();
+}
 
 const theme = computed(() => (isDarkTheme.value ? darkTheme : null));
 
@@ -217,6 +244,7 @@ onMounted(async () => {
         console.warn("无法获取 Tauri 版本", e);
       }
     })(),
+    updateTray(),
     engineModule.checkEngine(),
     configModule.loadConfig(),
   ]);
@@ -327,6 +355,12 @@ onUnmounted(() => {
           <!-- 设置 Modal -->
           <n-modal v-model:show="settingsVisible" preset="card" :title="t('settings.title')" style="width: 440px" class="premium-modal">
             <div class="settings-form">
+              <label class="settings-label">{{ t('settings.language') }}</label>
+              <n-select
+                :value="currentLanguageSetting"
+                :options="languageOptions"
+                @update:value="onLanguageChange"
+              />
               <label class="settings-label">{{ t('config.githubProxy') }}</label>
               <n-input
                 :value="configModule.config.github_proxy"

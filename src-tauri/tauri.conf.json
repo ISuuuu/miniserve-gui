@@ -28,6 +28,9 @@
     "active": true,
     "createUpdaterArtifacts": true,
     "targets": "all",
+    "category": "Network",
+    "shortDescription": "A lightweight cross-platform file sharing GUI for miniserve",
+    "longDescription": "miniserve-gui is a lightweight cross-platform desktop GUI client for miniserve, providing easy file sharing via web interface and QR code.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -44,6 +47,7 @@
       "nsis": {
         "installMode": "perMachine",
         "languages": [
+          "English",
           "SimpChinese"
         ]
       }

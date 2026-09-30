@@ -19,7 +19,13 @@ export default {
   },
   settings: {
     title: 'Settings',
+    language: 'Language',
+    languageAuto: 'System Default',
     close: 'Close',
+  },
+  tray: {
+    show: 'Show Window',
+    quit: 'Quit',
   },
   about: {
     title: 'About',
