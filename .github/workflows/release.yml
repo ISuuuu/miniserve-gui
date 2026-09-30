@@ -41,20 +41,16 @@ jobs:
         id: changelog
         shell: bash
         run: |
-          # 判断当前 HEAD 是否有 Tag
-          CURRENT_TAG=$(git tag --points-at HEAD 2>/dev/null | head -n 1)
-          if [ -n "$CURRENT_TAG" ]; then
-            PREV_TAG=$(git describe --tags --abbrev=0 "$CURRENT_TAG^" 2>/dev/null || echo "")
-          else
-            PREV_TAG=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || echo "")
-          fi
+          TAG="${{ github.event.inputs.version || github.ref_name }}"
+          git fetch --tags --quiet
+          PREV_TAG=$(git tag --sort=-creatordate | grep -v "^${TAG}$" | head -1 || echo "")
 
           if [ -n "$PREV_TAG" ]; then
             echo "Generating changelog between $PREV_TAG and HEAD"
-            LOGS=$(git log "$PREV_TAG..HEAD" --oneline --no-merges --pretty=format:"- %s")
+            LOGS=$(git log "${PREV_TAG}..HEAD" --oneline --no-merges --pretty=format:"- %s")
           else
-            echo "No previous tag found, generating full log"
-            LOGS=$(git log --oneline --no-merges --pretty=format:"- %s")
+            echo "No previous tag found, generating recent log"
+            LOGS=$(git log -20 --oneline --no-merges --pretty=format:"- %s")
           fi
 
           INPUT_BODY="${{ github.event.inputs.body }}"
@@ -206,17 +202,18 @@ jobs:
           TAG: ${{ github.event.inputs.version || github.ref_name }}
         run: |
           # 提取 commit 日志作为 updater notes
-          CURRENT_TAG=$(git tag --points-at HEAD 2>/dev/null | head -n 1)
-          if [ -n "$CURRENT_TAG" ]; then
-            PREV_TAG=$(git describe --tags --abbrev=0 "$CURRENT_TAG^" 2>/dev/null || echo "")
-          else
-            PREV_TAG=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || echo "")
-          fi
+          git fetch --tags --quiet
+          PREV_TAG=$(git tag --sort=-creatordate | grep -v "^${TAG}$" | head -1 || echo "")
 
           if [ -n "$PREV_TAG" ]; then
-            NOTES=$(git log "$PREV_TAG..HEAD" --oneline --no-merges --pretty=format:"- %s")
+            NOTES=$(git log "${PREV_TAG}..HEAD" --oneline --no-merges --pretty=format:"- %s")
           else
-            NOTES=$(git log --oneline --no-merges --pretty=format:"- %s")
+            NOTES=$(git log -20 --oneline --no-merges --pretty=format:"- %s")
+          fi
+
+          INPUT_BODY="${{ github.event.inputs.body }}"
+          if [ -n "$INPUT_BODY" ]; then
+            NOTES="$INPUT_BODY"
           fi
 
           # JSON 安全转义（换行转为 \n，双引号转义）
@@ -270,3 +267,6 @@ jobs:
 
           # 统一覆盖上传最终版 latest.json
           gh release upload "$TAG" latest.json --clobber -R "${{ github.repository }}"
+
+          # 确保 Release 页面的说明也更新为完整的日志（防止 tauri-action 重用已有 Release 时不更新正文）
+          gh release edit "$TAG" --notes "$NOTES" -R "${{ github.repository }}" || true
