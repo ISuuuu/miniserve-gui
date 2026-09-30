@@ -30,7 +30,7 @@
 | -------- | ------------------ | ------------------------------------------------- |
 | 基础运行 | `PATH`             | 要分享的文件夹路径                                |
 |          | `-p, --port`       | 服务端口（默认 8080）                             |
-|          | `-i, --interfaces` | 绑定网卡（0.0.0.0 或 127.0.0.1）                  |
+|          | `-i, --interfaces` | 绑定网卡（`0.0.0.0` / `::` 双栈或 `127.0.0.1`）   |
 | 安全控制 | `-a, --auth`       | 用户名:密码 认证                                  |
 |          | `-u, --upload`     | 允许访客上传文件                                  |
 |          | `-u -U`            | 允许创建目录                                      |
@@ -54,31 +54,39 @@
 ├── src/                        # 前端源码
 │   ├── App.vue                # 主组件（编排 composables）
 │   ├── main.ts                # Vue 入口
+│   ├── types.ts               # TypeScript 类型定义
+│   ├── utils/
+│   │   └── discrete.ts        # Naive UI 独立 API 与主题状态管理
 │   ├── composables/
 │   │   ├── useEngine.ts       # 引擎管理（检查/下载）
-│   │   ├── useConfig.ts       # 配置加载/保存/自动保存
+│   │   ├── useConfig.ts       # 配置加载/保存/防抖自动保存
 │   │   ├── useServer.ts       # 服务启停/状态管理
-│   │   ├── useLogs.ts         # 日志管理
+│   │   ├── useLogs.ts         # 批量实时日志管理
 │   │   ├── useQr.ts           # 二维码生成
-│   │   └── useUpdater.ts      # 自动更新
+│   │   └── useUpdater.ts      # 软件自动更新与代理回退
 │   ├── components/
 │   │   ├── ConfigPanel.vue    # 配置面板
-│   │   ├── TogglePill.vue     # 通用开关按钮
-│   │   ├── StatusCard.vue     # 服务状态卡片
+│   │   ├── TogglePill.vue     # 通用开关胶囊按钮
+│   │   ├── StatusCard.vue     # 服务状态与二维码卡片
 │   │   └── LogPanel.vue       # 运行日志面板
 │   └── i18n/
-│       ├── index.ts           # i18n 配置
+│       ├── index.ts           # i18n 配置与语言检测
 │       ├── zh-CN.ts           # 中文语言包
 │       └── en.ts              # 英文语言包
 ├── src-tauri/                  # Rust 后端
 │   ├── src/
 │   │   ├── lib.rs             # 模块声明、Job Object、托盘、入口
 │   │   ├── main.rs            # 程序入口
-│   │   ├── commands.rs        # Tauri commands
+│   │   ├── commands.rs        # Tauri commands（前端 API）
 │   │   ├── state.rs           # 状态和类型定义
 │   │   └── utils.rs           # 辅助函数、参数构建、配置验证
+│   ├── capabilities/          # Tauri 2 权限配置
 │   ├── Cargo.toml
 │   └── tauri.conf.json
+├── scripts/
+│   └── sync-version.js        # 版本号同步脚本
+├── .github/workflows/
+│   └── release.yml            # CI/CD 发布流程
 └── package.json
 ```
 
@@ -111,12 +119,16 @@ pnpm run tauri build
 
 ## 配置文件位置
 
-- **Windows**: `%LOCALAPPDATA%/miniserve-gui/bin/miniserve.exe`
+引擎二进制:
+
+- **Windows（安装版）**: `%LOCALAPPDATA%/miniserve-gui/bin/miniserve.exe`
+- **Windows（便携版）**: `<程序目录>/data/bin/miniserve.exe`
 - **Linux/macOS**: `~/.local/share/miniserve-gui/bin/miniserve`
 
 配置 JSON:
 
-- **Windows**: `%APPDATA%/miniserve-gui/config.json`
+- **Windows（安装版）**: `%APPDATA%/miniserve-gui/config.json`
+- **Windows（便携版）**: `<程序目录>/data/config.json`
 - **Linux/macOS**: `~/.config/miniserve-gui/config.json`
 
 ## 许可证

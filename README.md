@@ -52,18 +52,21 @@ Download the latest release from [Releases](https://github.com/ISuuuu/miniserve-
 
 ```
 ├── src/                        # Frontend source
-│   ├── App.vue                # Main component
+│   ├── App.vue                # Main component (orchestrating composables)
 │   ├── main.ts                # Vue entry point
+│   ├── types.ts               # TypeScript interfaces
+│   ├── utils/
+│   │   └── discrete.ts        # Naive UI discrete API & theme state
 │   ├── composables/
 │   │   ├── useEngine.ts       # Engine check and download
 │   │   ├── useConfig.ts       # Config persistence and auto-save
 │   │   ├── useServer.ts       # Server lifecycle and status
-│   │   ├── useLogs.ts         # Real-time log management
+│   │   ├── useLogs.ts         # Batched real-time log management
 │   │   ├── useQr.ts           # QR code generation
-│   │   └── useUpdater.ts      # Application auto-updater
+│   │   └── useUpdater.ts      # Application auto-updater & proxy fallback
 │   ├── components/
 │   │   ├── ConfigPanel.vue    # Configuration sidebar
-│   │   ├── TogglePill.vue     # Feature toggle button
+│   │   ├── TogglePill.vue     # Feature toggle pill component
 │   │   ├── StatusCard.vue     # Server status & QR code card
 │   │   └── LogPanel.vue       # Live log viewer
 │   └── i18n/
@@ -77,8 +80,13 @@ Download the latest release from [Releases](https://github.com/ISuuuu/miniserve-
 │   │   ├── commands.rs        # Tauri IPC commands
 │   │   ├── state.rs           # Application state and data structures
 │   │   └── utils.rs           # Helpers, CLI argument builder, validation
+│   ├── capabilities/          # Tauri 2 permission capabilities
 │   ├── Cargo.toml
 │   └── tauri.conf.json
+├── scripts/
+│   └── sync-version.js        # Version synchronization script
+├── .github/workflows/
+│   └── release.yml            # CI/CD release workflow
 └── package.json
 ```
 
@@ -113,12 +121,14 @@ pnpm run tauri build
 
 Engine binary:
 
-- **Windows**: `%LOCALAPPDATA%/miniserve-gui/bin/miniserve.exe`
+- **Windows (Installer)**: `%LOCALAPPDATA%/miniserve-gui/bin/miniserve.exe`
+- **Windows (Portable)**: `<exe_dir>/data/bin/miniserve.exe`
 - **Linux/macOS**: `~/.local/share/miniserve-gui/bin/miniserve`
 
 Configuration JSON:
 
-- **Windows**: `%APPDATA%/miniserve-gui/config.json`
+- **Windows (Installer)**: `%APPDATA%/miniserve-gui/config.json`
+- **Windows (Portable)**: `<exe_dir>/data/config.json`
 - **Linux/macOS**: `~/.config/miniserve-gui/config.json`
 
 ## License

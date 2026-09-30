@@ -75,10 +75,21 @@ pnpm run build        # 仅前端构建（vue-tsc --noEmit && vite build）
 
 ```
 ├── src/                        # 前端源码
-│   ├── App.vue                # 主组件（业务逻辑）
+│   ├── App.vue                # 主组件（编排 composables）
 │   ├── main.ts                # Vue 入口
+│   ├── types.ts               # TypeScript 类型定义
+│   ├── utils/
+│   │   └── discrete.ts        # Naive UI 独立 API 与主题状态管理
+│   ├── composables/
+│   │   ├── useEngine.ts       # 引擎管理（检查/下载）
+│   │   ├── useConfig.ts       # 配置加载/保存/自动保存
+│   │   ├── useServer.ts       # 服务启停/状态管理
+│   │   ├── useLogs.ts         # 批量日志管理
+│   │   ├── useQr.ts           # 二维码生成
+│   │   └── useUpdater.ts      # 自动更新与代理回退
 │   ├── components/
 │   │   ├── ConfigPanel.vue    # 配置面板组件
+│   │   ├── TogglePill.vue     # 通用开关胶囊按钮
 │   │   ├── StatusCard.vue     # 服务状态卡片
 │   │   └── LogPanel.vue       # 运行日志面板
 │   └── i18n/
@@ -104,12 +115,12 @@ pnpm run build        # 仅前端构建（vue-tsc --noEmit && vite build）
 ## 关键架构点
 
 ### 前端
-- 组件化架构：`ConfigPanel`、`StatusCard`、`LogPanel` 独立组件
-- `App.vue` 负责业务逻辑和组件编排
-- 使用 Vue 3 Composition API (`<script setup>`)
+- 组件与 Composables 分离：`ConfigPanel`、`TogglePill`、`StatusCard`、`LogPanel` 独立组件；`useEngine`、`useConfig`、`useServer`、`useLogs`、`useQr`、`useUpdater` 封装核心逻辑
+- `App.vue` 负责业务编排和弹窗交互
+- 使用 Vue 3 Composition API (`<script setup>`) + Naive UI (`src/utils/discrete.ts` 提供全局通知与深浅色主题)
 - 通过 `invoke()` 调用 Rust 后端命令
 - 使用 `listen()` 监听后端事件（下载进度、服务日志）
-- vue-i18n 国际化支持（中文/英文自动切换）
+- vue-i18n 国际化支持（默认检测系统语言，非中文环境回退英文，支持手动切换并同步系统托盘菜单）
 
 ### 后端
 - `commands.rs` - 所有 Tauri commands（前端 API）
