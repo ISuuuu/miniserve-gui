@@ -63,7 +63,7 @@ const featureDescriptions = computed<Record<string, string>>(() => ({
     <div class="form-row">
       <label class="form-label">{{ t('config.port') }}</label>
       <div class="form-control">
-        <n-input-number :value="config.port" :min="1" :max="65535" size="small" style="width: 100%;" @update:value="config.port = $event ?? config.port" />
+        <n-input-number :value="config.port" :min="1024" :max="65535" size="small" style="width: 100%;" @update:value="config.port = $event ?? config.port" />
       </div>
     </div>
 

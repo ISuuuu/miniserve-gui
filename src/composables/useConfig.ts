@@ -29,6 +29,9 @@ export function useConfig() {
       if (saved && saved.interfaces === "0.0.0.0") {
         saved.interfaces = "::";
       }
+      if (saved && (saved.port < 1024 || saved.port > 65535)) {
+        saved.port = 8080;
+      }
       Object.assign(config, saved);
     } catch (e) {
       console.error("Failed to load config:", e);

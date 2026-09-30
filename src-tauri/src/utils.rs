@@ -60,9 +60,9 @@ pub fn get_config_path() -> PathBuf {
 }
 
 pub fn validate_config(cfg: &ServerConfig) -> Result<(), String> {
-    // 验证端口范围
-    if cfg.port == 0 {
-        return Err("端口号不能为 0".into());
+    // 验证端口范围 (1024 ~ 65535)
+    if cfg.port < 1024 {
+        return Err("端口号必须在 1024 ~ 65535 之间".into());
     }
     
     // 验证路径
