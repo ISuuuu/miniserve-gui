@@ -5,6 +5,7 @@ use tauri::{
 };
 
 mod commands;
+mod http;
 mod state;
 mod utils;
 

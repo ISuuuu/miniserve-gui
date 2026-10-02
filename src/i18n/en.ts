@@ -59,9 +59,9 @@ export default {
     download: 'Download',
     readme: 'README',
     hidden: 'Show Hidden',
-    githubProxy: 'GitHub Download Proxy',
-    githubProxyTooltip: 'Speed up GitHub downloads for engine & updates. Supports HTTP/HTTPS proxy or mirror gateway.',
-    githubProxyPlaceholder: 'Leave empty for direct, e.g. https://proxy.example.com/',
+    proxy: 'Network Proxy',
+    proxyTooltip: 'Used for downloading engine and checking updates. Leave empty to use system proxy.',
+    proxyPlaceholder: 'Leave empty for system proxy, e.g. 127.0.0.1:7897',
   },
   features: {
     randomRoute: 'Add random suffix to server path to prevent scanning',

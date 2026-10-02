@@ -8,6 +8,7 @@ use log::info;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 
+use crate::http::{fetch_url_with_fallback, get_effective_proxy, stream_response_to_file};
 use crate::state::{AppState, EngineStatus, QrCodeResponse, ServerConfig, ServerStatus};
 use crate::utils::{build_miniserve_args, get_config_path, get_engine_path, get_local_ips, validate_config};
 
@@ -29,123 +30,6 @@ fn get_engine_version(path: &std::path::Path) -> Option<String> {
         .ok()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .filter(|v| !v.is_empty())
-}
-
-/// Prepend proxy prefix to a URL. Returns None if proxy is empty.
-fn apply_proxy(proxy_prefix: &str, url: &str) -> Option<String> {
-    if proxy_prefix.is_empty() {
-        None
-    } else {
-        Some(format!("{}{}", proxy_prefix, url))
-    }
-}
-
-/// Build a reqwest::Client for API/metadata requests with timeouts.
-fn build_http_client() -> Result<reqwest::Client, String> {
-    reqwest::Client::builder()
-        .user_agent("miniserve-gui-downloader")
-        .connect_timeout(std::time::Duration::from_secs(10))
-        .timeout(std::time::Duration::from_secs(15))
-        .build()
-        .map_err(|e| e.to_string())
-}
-
-/// Build a reqwest::Client for streaming large downloads. No total request timeout,
-/// since `stream_response_to_file` already enforces a per-chunk inactivity timeout.
-fn build_download_client() -> Result<reqwest::Client, String> {
-    reqwest::Client::builder()
-        .user_agent("miniserve-gui-downloader")
-        .connect_timeout(std::time::Duration::from_secs(10))
-        .build()
-        .map_err(|e| e.to_string())
-}
-
-/// Stream body chunks with a per-chunk inactivity timeout (30 seconds)
-/// to avoid hanging indefinitely if the remote server stalls.
-async fn stream_response_to_file<F>(
-    response: reqwest::Response,
-    mut file: std::fs::File,
-    mut on_chunk: F,
-) -> Result<u64, String>
-where
-    F: FnMut(&[u8], u64, u64),
-{
-    use futures_util::StreamExt;
-    use std::io::Write;
-    use tokio::time::{timeout, Duration};
-
-    let total_size = response.content_length().unwrap_or(0);
-    let mut downloaded: u64 = 0;
-    let mut stream = response.bytes_stream();
-    let chunk_timeout = Duration::from_secs(30);
-
-    loop {
-        let next_item = match timeout(chunk_timeout, stream.next()).await {
-            Ok(Some(item)) => item,
-            Ok(None) => break, // EOF
-            Err(_) => {
-                return Err("DOWNLOAD_TIMEOUT:下载数据流读取超时 (30s 无响应)".to_string());
-            }
-        };
-
-        let chunk = next_item.map_err(|e| format!("DOWNLOAD_CHUNK_FAILED:{}", e))?;
-        file.write_all(&chunk)
-            .map_err(|e| format!("FILE_WRITE_FAILED:{}", e))?;
-        downloaded += chunk.len() as u64;
-
-        on_chunk(&chunk, downloaded, total_size);
-    }
-
-    file.flush()
-        .map_err(|e| format!("FILE_FLUSH_FAILED:{}", e))?;
-    Ok(downloaded)
-}
-
-/// Send a GET request, optionally bounding only the wait for response headers
-/// (downloads stream the body to file afterwards, where per-chunk timeouts apply).
-async fn send_for_header(
-    client: &reqwest::Client,
-    url: &str,
-    header_timeout: Option<std::time::Duration>,
-) -> Result<reqwest::Response, String> {
-    let fut = client.get(url).send();
-    match header_timeout {
-        Some(d) => tokio::time::timeout(d, fut)
-            .await
-            .map_err(|_| "HEADER_TIMEOUT:等待响应头超时 (30s)".to_string())
-            .and_then(|r| r.map_err(|e| format!("NETWORK_ERROR:{}", e))),
-        None => fut.await.map_err(|e| format!("NETWORK_ERROR:{}", e)),
-    }
-}
-
-/// Fetch with fallback: 配置了代理则优先走代理（用户配置代理通常因直连缓慢），
-/// 失败再回退直连；未配置代理时仅直连。
-async fn fetch_with_proxy(
-    client: &reqwest::Client,
-    direct_url: &str,
-    proxy_url: Option<&str>,
-    header_timeout: Option<std::time::Duration>,
-) -> Result<reqwest::Response, String> {
-    let (primary, fallback): (&str, Option<&str>) = match proxy_url {
-        Some(proxy) => (proxy, Some(direct_url)),
-        None => (direct_url, None),
-    };
-    match send_for_header(client, primary, header_timeout).await {
-        Ok(resp) if resp.status().is_success() => Ok(resp),
-        res => {
-            if let Some(fallback_url) = fallback {
-                info!("首选通道失败 ({:?})，回退到直连: {}", res.as_ref().err(), fallback_url);
-                send_for_header(client, fallback_url, header_timeout)
-                    .await
-                    .map_err(|e| format!("NETWORK_ERROR:{}", e))
-            } else {
-                match res {
-                    Ok(resp) => Err(format!("HTTP_ERROR:{}", resp.status())),
-                    Err(e) => Err(e),
-                }
-            }
-        }
-    }
 }
 
 /// 检查目标主机端口是否已监听（单次连接 300ms 超时）。
@@ -226,16 +110,11 @@ pub async fn download_engine(
         browser_download_url: String,
     }
 
-    let client = build_http_client()?;
+    let effective_proxy = get_effective_proxy();
     let api_url = "https://api.github.com/repos/svenstaro/miniserve/releases/latest";
-    let proxy_prefix = get_proxy_prefix(&app_handle).unwrap_or_default();
-    if !proxy_prefix.is_empty() && !proxy_prefix.ends_with('/') {
-        return Err("代理 URL 必须以 / 结尾，例如 https://proxy.example.com/".into());
-    }
-    let proxy_api_url = apply_proxy(&proxy_prefix, api_url);
 
-    // Fetch latest release
-    let response = fetch_with_proxy(&client, api_url, proxy_api_url.as_deref(), None).await?;
+    // Fetch latest release with proxy fallback
+    let response = fetch_url_with_fallback(api_url, effective_proxy.as_deref(), false, None).await?;
     if !response.status().is_success() {
         let err_text = response.text().await.unwrap_or_default();
         #[derive(Deserialize, Debug)]
@@ -280,9 +159,12 @@ pub async fn download_engine(
         .ok_or("No matching binary found")?;
 
     // Download binary with proxy fallback
-    let download_client = build_download_client()?;
-    let proxy_download_url = apply_proxy(&proxy_prefix, &asset.browser_download_url);
-    let response = fetch_with_proxy(&download_client, &asset.browser_download_url, proxy_download_url.as_deref(), Some(std::time::Duration::from_secs(30))).await?;
+    let response = fetch_url_with_fallback(
+        &asset.browser_download_url,
+        effective_proxy.as_deref(),
+        true,
+        Some(std::time::Duration::from_secs(30)),
+    ).await?;
 
     let bin_dir = get_engine_path().parent().unwrap().to_path_buf();
     fs::create_dir_all(&bin_dir).map_err(|e| e.to_string())?;
@@ -681,26 +563,6 @@ pub struct UpdaterPluginConfig {
     pub proxy: Option<String>,
 }
 
-/// Get the GitHub proxy prefix. User config takes priority over tauri.conf.json.
-pub fn get_proxy_prefix(app_handle: &AppHandle) -> Option<String> {
-    // 1. Try user config first
-    let config_path = get_config_path();
-    if config_path.exists() {
-        if let Ok(content) = fs::read_to_string(&config_path) {
-            if let Ok(config) = serde_json::from_str::<ServerConfig>(&content) {
-                if !config.github_proxy.is_empty() {
-                    return Some(config.github_proxy);
-                }
-            }
-        }
-    }
-    // 2. Fall back to tauri.conf.json updater plugin config
-    let plugins = &app_handle.config().plugins.0;
-    let updater_value = plugins.get("updater")?;
-    let config: UpdaterPluginConfig = serde_json::from_value(updater_value.clone()).ok()?;
-    config.proxy
-}
-
 /// 获取更新器公钥（来自 tauri.conf.json plugins.updater.pubkey）
 fn get_updater_pubkey(app_handle: &AppHandle) -> Result<String, String> {
     let plugins = &app_handle.config().plugins.0;
@@ -752,27 +614,22 @@ pub fn get_updater_config(app_handle: AppHandle) -> Result<UpdaterConfig, String
     let config: UpdaterPluginConfig = serde_json::from_value(updater_value.clone())
         .map_err(|e| format!("failed to parse updater config: {}", e))?;
 
+    let effective_proxy = get_effective_proxy().or(config.proxy);
+
     Ok(UpdaterConfig {
         endpoints: config.endpoints,
-        proxy: config.proxy,
+        proxy: effective_proxy,
     })
 }
 
 /// Fetch update manifest with proxy fallback (moved from frontend to avoid CSP issues).
 #[tauri::command]
 pub async fn fetch_update_manifest(
-    app_handle: AppHandle,
+    _app_handle: AppHandle,
     url: String,
 ) -> Result<serde_json::Value, String> {
-    let client = build_http_client()?;
-    let proxy_prefix = get_proxy_prefix(&app_handle).unwrap_or_default();
-    let proxy_url = if !proxy_prefix.is_empty() {
-        apply_proxy(&proxy_prefix, &url)
-    } else {
-        None
-    };
-
-    let response = fetch_with_proxy(&client, &url, proxy_url.as_deref(), None).await?;
+    let effective_proxy = get_effective_proxy();
+    let response = fetch_url_with_fallback(&url, effective_proxy.as_deref(), false, None).await?;
     if !response.status().is_success() {
         return Err(format!("MANIFEST_FETCH_FAILED:{}", response.status()));
     }
@@ -796,17 +653,15 @@ pub async fn download_and_install_update(
     }
 
     info!("开始下载更新 v{}: {}", version, url);
-    let client = build_download_client()?;
-
-    let proxy_prefix = get_proxy_prefix(&app_handle).unwrap_or_default();
-    let proxy_url = if !proxy_prefix.is_empty() {
-        apply_proxy(&proxy_prefix, &url)
-    } else {
-        None
-    };
+    let effective_proxy = get_effective_proxy();
 
     info!("下载更新: {}", url);
-    let response = fetch_with_proxy(&client, &url, proxy_url.as_deref(), Some(std::time::Duration::from_secs(30))).await?;
+    let response = fetch_url_with_fallback(
+        &url,
+        effective_proxy.as_deref(),
+        true,
+        Some(std::time::Duration::from_secs(30)),
+    ).await?;
 
     if !response.status().is_success() {
         return Err(format!("DOWNLOAD_FAILED:HTTP {}", response.status()));
@@ -1006,4 +861,46 @@ pub fn update_tray_menu(
     tray_state.show_item.set_text(show_text).map_err(|e| e.to_string())?;
     tray_state.quit_item.set_text(quit_text).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+#[test]
+    fn test_config_deserialization() {
+        let old_json = r#"{
+            "path": "",
+            "port": 8080,
+            "interfaces": "0.0.0.0",
+            "auth_username": null,
+            "auth_password": null,
+            "upload": false,
+            "mkdir": false,
+            "color_scheme": "squirrel",
+            "title": "miniserve",
+            "compress": "",
+            "hidden": false,
+            "github_proxy": "https://example.com/"
+        }"#;
+        let cfg: ServerConfig = serde_json::from_str(old_json).unwrap();
+        assert_eq!(cfg.proxy, "");
+
+        let new_json = r#"{
+            "path": "",
+            "port": 8080,
+            "interfaces": "0.0.0.0",
+            "auth_username": null,
+            "auth_password": null,
+            "upload": false,
+            "mkdir": false,
+            "color_scheme": "squirrel",
+            "title": "miniserve",
+            "compress": "",
+            "hidden": false,
+            "proxy": "127.0.0.1:7897"
+        }"#;
+        let cfg2: ServerConfig = serde_json::from_str(new_json).unwrap();
+        assert_eq!(cfg2.proxy, "127.0.0.1:7897");
+    }
 }

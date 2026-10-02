@@ -59,9 +59,9 @@ export default {
     download: '打包下载',
     readme: 'README',
     hidden: '显示点文件',
-    githubProxy: 'GitHub 下载代理',
-    githubProxyTooltip: '加速 GitHub 下载引擎及更新，支持 HTTP/HTTPS 代理或镜像网关。',
-    githubProxyPlaceholder: '留空则直连，例如 https://proxy.example.com/',
+    proxy: '网络代理',
+    proxyTooltip: '用于下载引擎及检查更新。留空自动使用系统代理。',
+    proxyPlaceholder: '留空使用系统代理，例如 127.0.0.1:7897',
   },
   features: {
     randomRoute: '为服务器路径添加随机后缀，防止被他人扫描访问',

@@ -131,7 +131,7 @@ export function useUpdater(
     }
   }
 
-  async function installUpdate(update: any) {
+  async function installUpdate(update: any, proxy?: string | null) {
     let installDir = "";
     try {
       installDir = await invoke("get_install_dir");
@@ -175,7 +175,7 @@ export function useUpdater(
               break;
           }
         },
-        { installerArgs },
+        { installerArgs, proxy: proxy ?? undefined },
       );
     } finally {
       updateDownloading.value = false;
@@ -253,8 +253,11 @@ export function useUpdater(
       let update = null;
       try {
         const { check } = await import("@tauri-apps/plugin-updater");
+        const checkOptions = updaterConfig.proxy
+          ? { proxy: updaterConfig.proxy }
+          : undefined;
         update = await Promise.race([
-          check(),
+          check(checkOptions),
           new Promise<null>((_, reject) =>
             setTimeout(() => reject(new Error("Timeout")), 5000),
           ),
@@ -277,7 +280,7 @@ export function useUpdater(
           return;
         if (packageType !== "appimage") {
           // NSIS installer: use plugin's native download with progress tracking
-          await installUpdate(update);
+          await installUpdate(update, updaterConfig.proxy);
           return;
         }
         // AppImage: need manifest for platform-specific URL

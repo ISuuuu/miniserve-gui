@@ -27,12 +27,8 @@ pub struct ServerConfig {
     pub download: bool,
     #[serde(default)]
     pub webdav: bool,
-    #[serde(default = "default_github_proxy")]
-    pub github_proxy: String,
-}
-
-fn default_github_proxy() -> String {
-    "https://github.369900.xyz/".into()
+    #[serde(default)]
+    pub proxy: String,
 }
 
 impl Default for ServerConfig {
@@ -53,7 +49,7 @@ impl Default for ServerConfig {
             readme: false,
             download: false,
             webdav: false,
-            github_proxy: default_github_proxy(),
+            proxy: String::new(),
         }
     }
 }

@@ -19,18 +19,23 @@ export function useConfig() {
     readme: false,
     download: false,
     webdav: false,
-    github_proxy: "https://github.369900.xyz/",
+    proxy: "",
   });
 
   async function loadConfig() {
     try {
       const saved = await invoke<ServerConfig>("load_config");
-      // 兼容老版本配置：统一升级为双栈监听
-      if (saved && saved.interfaces === "0.0.0.0") {
-        saved.interfaces = "::";
-      }
-      if (saved && (saved.port < 1024 || saved.port > 65535)) {
-        saved.port = 8080;
+      if (saved) {
+        // 兼容老版本配置：统一升级为双栈监听
+        if (saved.interfaces === "0.0.0.0") {
+          saved.interfaces = "::";
+        }
+        if (saved.port < 1024 || saved.port > 65535) {
+          saved.port = 8080;
+        }
+        if (saved.proxy === undefined) {
+          saved.proxy = "";
+        }
       }
       Object.assign(config, saved);
     } catch (e) {

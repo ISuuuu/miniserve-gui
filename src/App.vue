@@ -361,14 +361,14 @@ onUnmounted(() => {
                 :options="languageOptions"
                 @update:value="onLanguageChange"
               />
-              <label class="settings-label">{{ t('config.githubProxy') }}</label>
+              <label class="settings-label">{{ t('config.proxy') }}</label>
               <n-input
-                :value="configModule.config.github_proxy"
-                :placeholder="t('config.githubProxyPlaceholder')"
-                @update:value="configModule.config.github_proxy = $event"
+                :value="configModule.config.proxy"
+                :placeholder="t('config.proxyPlaceholder')"
+                @update:value="configModule.config.proxy = $event"
               />
               <div class="settings-hint">
-                {{ t('config.githubProxyTooltip') }}
+                {{ t('config.proxyTooltip') }}
               </div>
             </div>
             <template #footer>

@@ -71,8 +71,7 @@
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDgzQjk5RURCMTE1MTM5MEIKUldRTE9WRVIyNTY1Z3pVZWRIQzh1bythRWZ3bWJsdTdoeS9uUTEvL0ZBa3I1bXZEd1o3cWpRbTYK",
       "endpoints": [
         "https://github.com/ISuuuu/miniserve-gui/releases/latest/download/latest.json"
-      ],
-      "proxy": "https://github.369900.xyz/"
+      ]
     }
   }
 }
