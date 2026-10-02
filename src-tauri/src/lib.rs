@@ -6,8 +6,14 @@ use tauri::{
 
 mod commands;
 mod http;
+mod portable_updater;
 mod state;
 mod utils;
+
+/// 便携版更新 helper 进程入口。必须在 main() 最开头调用（Tauri 初始化之前）。
+pub fn run_portable_update_helper_if_requested() -> bool {
+    portable_updater::run_helper_if_requested()
+}
 
 // ============ Windows Job Object (防止子进程成为孤儿) ============
 
@@ -177,6 +183,9 @@ pub fn run() {
     
     #[cfg(debug_assertions)]
     log::info!("miniserve-gui starting...");
+
+    // 非阻塞清理便携版更新残留的工作目录
+    portable_updater::schedule_cleanup_from_environment();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {

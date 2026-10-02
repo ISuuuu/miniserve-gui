@@ -96,8 +96,12 @@ export function useUpdater(
   async function downloadAndInstallViaBackend(
     latestVersion: string,
     updateJson: any,
+    packageType: string,
   ) {
-    const platform = `${getPlatform()}-${getArch()}`;
+    // 便携版在 latest.json 中使用独立的 target key
+    const isPortable = packageType === "portable";
+    const base = `${getPlatform()}-${getArch()}`;
+    const platform = isPortable ? `${base}-portable` : base;
     const platformInfo = updateJson.platforms?.[platform];
     if (!platformInfo)
       throw new Error(t("update.platformNotAvailable", { platform }));
@@ -121,8 +125,12 @@ export function useUpdater(
         version: latestVersion,
       });
       updateProgress.value = 100;
-      message.success(t("update.updateComplete"));
       logs.addLog(t("update.downloadFinished"));
+      if (isPortable) {
+        // 便携版：后端已拉起 helper 进程接管替换与重启，主进程随即退出
+        return;
+      }
+      message.success(t("update.updateComplete"));
       const { relaunch } = await import("@tauri-apps/plugin-process");
       await relaunch();
     } finally {
@@ -189,7 +197,7 @@ export function useUpdater(
     version: string,
     packageType: string,
   ): Promise<boolean> {
-    if (packageType !== "deb" && packageType !== "portable") return false;
+    if (packageType !== "deb") return false;
     logs.addLog(
       t("update.debOrPortableNotSupported", { version, packageType }),
     );
@@ -215,6 +223,7 @@ export function useUpdater(
   async function handleVersionUpdate(
     version: string,
     updateJson: any,
+    packageType: string,
   ) {
     const currentVersion = appVersion().replace(/^v/, "");
     const latestVersion = (version || updateJson.version || "").replace(
@@ -226,7 +235,6 @@ export function useUpdater(
       return;
     }
 
-    const packageType = await invoke<string>("get_package_type");
     if (await handleUnsupportedPackage(latestVersion, packageType)) return;
 
     logs.addLog(
@@ -236,7 +244,7 @@ export function useUpdater(
       }),
     );
 
-    await downloadAndInstallViaBackend(latestVersion, updateJson);
+    await downloadAndInstallViaBackend(latestVersion, updateJson, packageType);
   }
 
   async function checkForUpdates() {
@@ -248,6 +256,7 @@ export function useUpdater(
       const updaterConfig =
         await invoke<UpdaterConfig>("get_updater_config");
       const originalUrl = updaterConfig.endpoints[0] || "";
+      const packageType = await invoke<string>("get_package_type");
 
       // Try Tauri plugin updater first (with 5s timeout)
       let update = null;
@@ -275,23 +284,23 @@ export function useUpdater(
       if (update) {
         // Plugin updater found an update — NSIS uses native install with progress,
         // other package types fall through to manifest-based path
-        const packageType = await invoke<string>("get_package_type");
         if (await handleUnsupportedPackage(update.version, packageType))
           return;
-        if (packageType !== "appimage") {
+        if (packageType !== "appimage" && packageType !== "portable") {
           // NSIS installer: use plugin's native download with progress tracking
           await installUpdate(update, updaterConfig.proxy);
           return;
         }
-        // AppImage: need manifest for platform-specific URL
+        // AppImage / portable: need manifest for platform-specific URL
         const updateJson = await fetchUpdateManifest(originalUrl);
-        await handleVersionUpdate(update.version, updateJson);
+        await handleVersionUpdate(update.version, updateJson, packageType);
       } else {
         // Fallback: fetch manifest manually and compare versions
         const updateJson = await fetchUpdateManifest(originalUrl);
         await handleVersionUpdate(
           updateJson.version || "",
           updateJson,
+          packageType,
         );
       }
     } catch (e: any) {

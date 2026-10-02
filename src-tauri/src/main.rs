@@ -3,6 +3,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
+    // 便携版更新 helper 进程入口：必须在一切 Tauri 初始化之前判定
+    if miniserve_gui_lib::run_portable_update_helper_if_requested() {
+        return;
+    }
+
     // 仅在 Linux 下设置 WebKit 与 GDK 环境变量，解决虚拟机及 AppImage 下画面不刷新、按钮与输入框无响应问题
     #[cfg(target_os = "linux")]
     {

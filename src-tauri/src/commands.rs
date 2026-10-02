@@ -10,7 +10,10 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::http::{fetch_url_with_fallback, get_effective_proxy, stream_response_to_file};
 use crate::state::{AppState, EngineStatus, QrCodeResponse, ServerConfig, ServerStatus};
-use crate::utils::{build_miniserve_args, get_config_path, get_engine_path, get_local_ips, validate_config};
+use crate::utils::{
+    build_miniserve_args, get_config_path, get_engine_path, get_local_ips, is_portable,
+    validate_config,
+};
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -652,6 +655,12 @@ pub async fn download_and_install_update(
         }
     }
 
+    // 便携版需覆盖 exe，提前确认目录可写，避免下载完成后才失败
+    #[cfg(windows)]
+    if is_portable() {
+        crate::portable_updater::ensure_exe_dir_writable()?;
+    }
+
     info!("开始下载更新 v{}: {}", version, url);
     let effective_proxy = get_effective_proxy();
 
@@ -721,6 +730,13 @@ pub async fn download_and_install_update(
     #[cfg(windows)]
     {
         use std::process::Command;
+
+        // 便携版：用 zip 覆盖 + helper 进程原子替换 exe
+        if is_portable() {
+            let staged = crate::portable_updater::stage_archive(&temp_path)?;
+            return crate::portable_updater::apply_staged(&staged, &app_handle);
+        }
+
         let install_dir = std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(|p| p.to_path_buf()));

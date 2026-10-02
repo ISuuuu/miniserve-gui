@@ -21,7 +21,7 @@ Download the latest release from [Releases](https://github.com/ISuuuu/miniserve-
 
 | Platform    | Installer                        | Portable                              |
 | ----------- | -------------------------------- | ------------------------------------- |
-| **Windows** | `.exe` (NSIS Installer)          | `_portable_x64.exe` (Single Binary)   |
+| **Windows** | `.exe` (NSIS Installer)          | `_portable_x64.zip` (Auto-updating)  |
 | **Linux**   | `.deb` / `.rpm` (System Package) | `.AppImage` (Universal Portable)      |
 
 ## Supported Options

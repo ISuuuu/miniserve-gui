@@ -11,29 +11,32 @@ pub const VALID_COLOR_SCHEMES: &[&str] = &[
     "monokai",
 ];
 
-/// 检测是否为便携版（仅 Windows，只检测卸载程序）
+/// 便携版标记文件（放在 exe 同级目录）
+pub const PORTABLE_MARKER_FILE: &str = "portable.flag";
+
+/// 检测是否为便携版（仅 Windows，exe 同级目录存在 portable.flag 即为便携版）
 pub fn is_portable() -> bool {
     // 非 Windows 不支持便携版
     if env::consts::OS != "windows" {
         return false;
     }
 
-    let exe_dir = env::current_exe()
+    current_exe_dir()
+        .map(|dir| dir.join(PORTABLE_MARKER_FILE).exists())
+        .unwrap_or(false)
+}
+
+/// 当前 exe 所在目录
+pub fn current_exe_dir() -> Option<PathBuf> {
+    env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-        .unwrap_or_default();
-
-    // 有卸载程序则为安装版
-    !exe_dir.join("Uninstall miniserve-gui.exe").exists()
-        && !exe_dir.join("uninstall.exe").exists()
-        && !exe_dir.join("unins000.exe").exists()
 }
 
 /// 便携版数据目录（exe 同级 data/）
 fn portable_data_dir() -> PathBuf {
-    env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.join("data")))
+    current_exe_dir()
+        .map(|dir| dir.join("data"))
         .unwrap_or_else(|| PathBuf::from("data"))
 }
 

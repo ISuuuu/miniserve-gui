@@ -150,17 +150,34 @@ jobs:
           releaseDraft: false
           prerelease: false
 
-      - name: Upload Windows Portable
+      - name: Pack and Upload Windows Portable
         if: matrix.os == 'windows-latest'
-        shell: bash
+        shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           TAG: ${{ github.event.inputs.version || github.ref_name }}
         run: |
-          echo "Uploading Windows Portable version..."
-          PORTABLE_NAME="miniserve-gui_${TAG}_portable_x64.exe"
-          cp "src-tauri/target/release/miniserve-gui.exe" "$PORTABLE_NAME"
-          gh release upload "$TAG" "$PORTABLE_NAME" --clobber
+          # 便携版以 zip 分发：内含可执行文件 + portable.flag 标记 + 预留 data 目录
+          $ROOT_NAME = "miniserve-gui-portable"
+          $PACKAGE_DIR = Join-Path $env:RUNNER_TEMP "portable-package"
+          $PORTABLE_DIR = Join-Path $PACKAGE_DIR $ROOT_NAME
+          $ZIP_PATH = Join-Path $PACKAGE_DIR "miniserve-gui_${env:TAG}_portable_x64.zip"
+
+          New-Item -ItemType Directory -Path (Join-Path $PORTABLE_DIR "data") -Force | Out-Null
+          Copy-Item "src-tauri/target/release/miniserve-gui.exe" $PORTABLE_DIR
+          New-Item -ItemType File -Path (Join-Path $PORTABLE_DIR "portable.flag") -Force | Out-Null
+          New-Item -ItemType File -Path (Join-Path $PORTABLE_DIR "data/.keep") -Force | Out-Null
+
+          # 在包目录内打包，保留顶层目录，解压后直接得到 miniserve-gui-portable/
+          Push-Location $PACKAGE_DIR
+          7z a -tzip -mx=7 $ZIP_PATH $ROOT_NAME
+          Pop-Location
+
+          pnpm tauri signer sign $ZIP_PATH --private-key $env:TAURI_SIGNING_PRIVATE_KEY --password $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+
+          gh release upload "$env:TAG" $ZIP_PATH "$ZIP_PATH.sig" --clobber
 
       - name: Upload Signatures Manually (Fallback)
         shell: bash
@@ -239,6 +256,8 @@ jobs:
             platform=""
             if [[ "$file_name" == *"-setup.exe" ]]; then
               platform="windows-x86_64"
+            elif [[ "$file_name" == *"portable"*.zip ]]; then
+              platform="windows-x86_64-portable"
             elif [[ "$file_name" == *".AppImage" ]]; then
               platform="linux-x86_64"
             else
