@@ -34,7 +34,7 @@ Download the latest release from [Releases](https://github.com/ISuuuu/miniserve-
 | Security | `-a, --auth`       | `username:password` HTTP authentication                    |
 |          | `-u, --upload`     | Allow visitors to upload files                             |
 |          | `-u -U`            | Allow creating directories                                 |
-| Display  | `--color-scheme`   | Theme (`squirrel`, `archlinux`, `zenburn`, `monokai`)      |
+| Display  | `--color-scheme`   | Theme (`squirrel`, `archlinux`, `ayu-dark`, `zenburn`, `monokai`) |
 |          | `--title`          | Custom page title                                          |
 | Advanced | `-H, --hidden`     | Show hidden files (dotfiles)                               |
 |          | `--random-route`   | Generate a random route suffix                             |

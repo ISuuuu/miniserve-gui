@@ -73,6 +73,7 @@ export default {
   colorSchemes: {
     squirrel: '🐿️ 松鼠 (squirrel)',
     archlinux: '🐧 Arch Linux (archlinux)',
+    ayuDark: '🌃 阿尤深色 (ayu-dark)',
     zenburn: '🎋 禅意 (zenburn)',
     monokai: '🍈 物语 (monokai)',
   },

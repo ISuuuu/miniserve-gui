@@ -31,6 +31,7 @@ const interfaceOptions = computed(() => [
 const colorSchemeOptions = computed(() => [
   { label: t('colorSchemes.squirrel'), value: "squirrel" },
   { label: t('colorSchemes.archlinux'), value: "archlinux" },
+  { label: t('colorSchemes.ayuDark'), value: "ayu-dark" },
   { label: t('colorSchemes.zenburn'), value: "zenburn" },
   { label: t('colorSchemes.monokai'), value: "monokai" },
 ]);

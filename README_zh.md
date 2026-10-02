@@ -34,7 +34,7 @@
 | 安全控制 | `-a, --auth`       | 用户名:密码 认证                                  |
 |          | `-u, --upload`     | 允许访客上传文件                                  |
 |          | `-u -U`            | 允许创建目录                                      |
-| 界面展示 | `--color-scheme`   | 配色主题（squirrel, archlinux, zenburn, monokai） |
+| 界面展示 | `--color-scheme`   | 配色主题（squirrel, archlinux, ayu-dark, zenburn, monokai） |
 |          | `--title`          | 网页标题                                          |
 | 高级进阶 | `-H, --hidden`     | 显示点开头的文件                                  |
 |          | `--random-route`   | 随机路径                                          |

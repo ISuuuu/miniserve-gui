@@ -3,7 +3,13 @@ use std::path::PathBuf;
 
 use crate::state::ServerConfig;
 
-pub const VALID_COLOR_SCHEMES: &[&str] = &["squirrel", "archlinux", "zenburn", "monokai"];
+pub const VALID_COLOR_SCHEMES: &[&str] = &[
+    "squirrel",
+    "archlinux",
+    "ayu-dark",
+    "zenburn",
+    "monokai",
+];
 
 /// 检测是否为便携版（仅 Windows，只检测卸载程序）
 pub fn is_portable() -> bool {
