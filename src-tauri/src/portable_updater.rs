@@ -191,6 +191,9 @@ pub fn run_helper_if_requested() -> bool {
             write_helper_error(target_exe, &error);
             // 即使替换失败也要拉起目标程序，保证用户还能启动应用
             let mut command = Command::new(target_exe);
+            if let Some(target_dir) = target_exe.parent() {
+                command.current_dir(target_dir);
+            }
             if let Some(work_dir) = args.get(4) {
                 command.env(CLEANUP_ENV, work_dir);
             }
@@ -215,7 +218,11 @@ fn run_helper(args: &[OsString]) -> Result<(), String> {
 
     wait_for_process_exit(parent_pid)?;
     replace_executable(&current_exe()?, &target_exe)?;
-    Command::new(&target_exe)
+    let mut command = Command::new(&target_exe);
+    if let Some(target_dir) = target_exe.parent() {
+        command.current_dir(target_dir);
+    }
+    command
         .env(CLEANUP_ENV, &work_dir)
         .spawn()
         .map_err(|e| e.to_string())?;

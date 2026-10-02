@@ -16,6 +16,7 @@ pub fn normalize_proxy_url(raw: &str) -> String {
     }
     if s.starts_with("http://")
         || s.starts_with("https://")
+        || s.starts_with("socks://")
         || s.starts_with("socks5://")
         || s.starts_with("socks5h://")
     {
@@ -204,6 +205,8 @@ mod tests {
         assert_eq!(normalize_proxy_url("http://127.0.0.1:7897"), "http://127.0.0.1:7897");
         assert_eq!(normalize_proxy_url("http://127.0.0.1:7897/"), "http://127.0.0.1:7897");
         assert_eq!(normalize_proxy_url("https://proxy.example.com:8443/"), "https://proxy.example.com:8443");
+        assert_eq!(normalize_proxy_url("socks://127.0.0.1:1080"), "socks://127.0.0.1:1080");
+        assert_eq!(normalize_proxy_url("socks://127.0.0.1:1080/"), "socks://127.0.0.1:1080");
         assert_eq!(normalize_proxy_url("socks5://127.0.0.1:1080"), "socks5://127.0.0.1:1080");
         assert_eq!(normalize_proxy_url("socks5h://127.0.0.1:1080/"), "socks5h://127.0.0.1:1080");
         assert_eq!(normalize_proxy_url("   "), "");
@@ -213,6 +216,7 @@ mod tests {
     fn test_resolve_proxy_custom() {
         assert_eq!(resolve_proxy("127.0.0.1:7897"), Some("http://127.0.0.1:7897".into()));
         assert_eq!(resolve_proxy("http://127.0.0.1:7897"), Some("http://127.0.0.1:7897".into()));
+        assert_eq!(resolve_proxy("socks://127.0.0.1:7897"), Some("socks://127.0.0.1:7897".into()));
         assert_eq!(resolve_proxy("socks5://127.0.0.1:7897"), Some("socks5://127.0.0.1:7897".into()));
         assert_eq!(resolve_proxy("direct"), None);
         assert_eq!(resolve_proxy("DIRECT"), None);
