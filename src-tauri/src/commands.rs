@@ -577,14 +577,35 @@ fn get_updater_pubkey(app_handle: &AppHandle) -> Result<String, String> {
         .ok_or("updater pubkey not found in config".into())
 }
 
+/// 将 base64 编码的 minisign 文本解码为明文字符串；若已经是明文（以 untrusted comment 开头）则原样返回
+fn base64_to_string(s: &str) -> Result<String, String> {
+    use base64::Engine;
+    let trimmed = s.trim();
+    if trimmed.starts_with("untrusted comment:") {
+        return Ok(trimmed.to_string());
+    }
+    let s_clean: String = trimmed.chars().filter(|c| !c.is_whitespace()).collect();
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(&s_clean)
+        .map_err(|e| format!("BASE64_DECODE_FAILED:{}", e))?;
+    String::from_utf8(decoded).map_err(|e| format!("UTF8_DECODE_FAILED:{}", e))
+}
+
 /// 验证下载文件的 minisign 签名
 fn verify_signature(data: &[u8], signature_b64: &str, pubkey_b64: &str) -> Result<(), String> {
     use minisign_verify::{PublicKey, Signature};
-    let public_key = PublicKey::decode(pubkey_b64)
+    let pubkey_str = base64_to_string(pubkey_b64)
         .map_err(|e| format!("PUBKEY_PARSE_FAILED:{}", e))?;
-    let signature = Signature::decode(signature_b64)
+    let public_key = PublicKey::decode(&pubkey_str)
+        .map_err(|e| format!("PUBKEY_PARSE_FAILED:{}", e))?;
+
+    let sig_str = base64_to_string(signature_b64)
         .map_err(|e| format!("SIGNATURE_PARSE_FAILED:{}", e))?;
-    public_key.verify(data, &signature, false)
+    let signature = Signature::decode(&sig_str)
+        .map_err(|e| format!("SIGNATURE_PARSE_FAILED:{}", e))?;
+
+    public_key
+        .verify(data, &signature, true)
         .map_err(|_| "SIGNATURE_INVALID".into())
 }
 
@@ -918,5 +939,19 @@ mod tests {
         }"#;
         let cfg2: ServerConfig = serde_json::from_str(new_json).unwrap();
         assert_eq!(cfg2.proxy, "127.0.0.1:7897");
+    }
+
+    #[test]
+    fn test_pubkey_and_signature_decoding() {
+        let pubkey_b64 = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDgzQjk5RURCMTE1MTM5MEIKUldRTE9WRVIyNTY1Z3pVZWRIQzh1bythRWZ3bWJsdTdoeS9uUTEvL0ZBa3I1bXZEd1o3cWpRbTYK";
+        let sig_b64 = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRTE9WRVIyNTY1Z3c5d1VUZ2txLzY4QVVoR1lWK0YvYitaeEJnazArSDNHUkJrVmdPVzcxb0xpZ1gySEJvTEJvNG5BbEdmQmFqMHVnRVF0dmZLNEFNaTRKZ0tUclo1RFE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMDAyMDE4CWZpbGU6bWluaXNlcnZlLWd1aV92MC44LjJfcG9ydGFibGVfeDY0LnppcApWSW0xSDJMUVlIY2pZVEZRR2NFbWxERkpSMEtIeWMxall6NEh1U2Q0UUdpR2I2UUx1ajNXNzJvQXk2bjRlTUQ2ZGNLdk9wak96UDV1R1BMS1pFY2ZBdz09Cg==";
+
+        let pubkey_str = base64_to_string(pubkey_b64).expect("pubkey base64 decode should succeed");
+        let pubkey = minisign_verify::PublicKey::decode(&pubkey_str).expect("pubkey decode should succeed");
+        assert_eq!(pubkey.untrusted_comment(), Some("untrusted comment: minisign public key: 83B99EDB1151390B"));
+
+        let sig_str = base64_to_string(sig_b64).expect("sig base64 decode should succeed");
+        let sig = minisign_verify::Signature::decode(&sig_str).expect("sig decode should succeed");
+        assert_eq!(sig.trusted_comment(), "timestamp:1791002018\tfile:miniserve-gui_v0.8.2_portable_x64.zip");
     }
 }
