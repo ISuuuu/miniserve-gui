@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted, h } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { darkTheme } from "naive-ui";
@@ -137,7 +137,20 @@ const settingsVisible = ref(false);
 
 const menuOptions = computed(() => [
   { label: t('header.settings'), key: 'settings' },
-  { label: t('header.about'), key: 'about' },
+  {
+    label: () =>
+      h(
+        'div',
+        { class: 'menu-item-with-badge' },
+        [
+          h('span', t('header.about')),
+          updaterModule.hasUpdate.value
+            ? h('span', { class: 'menu-badge-dot' })
+            : null,
+        ],
+      ),
+    key: 'about',
+  },
 ]);
 
 function onMenuSelect(key: string) {
@@ -229,6 +242,16 @@ onMounted(async () => {
     safeListen("server-started", (event) => {
       logsModule.addLog("Server event: " + JSON.stringify(event.payload));
     }),
+    safeListen<any>("updater://update-available", (event) => {
+      updaterModule.hasUpdate.value = true;
+      if (event.payload?.version) {
+        updaterModule.availableUpdate.value = {
+          version: event.payload.version,
+          body: event.payload.body,
+          date: event.payload.date,
+        };
+      }
+    }),
     // 后端日志为合批数组，一次性入队
     safeListen<string[]>("server-log", (event) => {
       logsModule.addLogs(event.payload);
@@ -243,6 +266,7 @@ onMounted(async () => {
       } catch (e) {
         console.warn("无法获取 Tauri 版本", e);
       }
+      updaterModule.checkUpdateSilent();
     })(),
     updateTray(),
     engineModule.checkEngine(),
@@ -342,13 +366,16 @@ onUnmounted(() => {
                 </template>
               </n-button>
 
-              <n-dropdown :options="menuOptions" @select="onMenuSelect" trigger="click" placement="bottom-end">
-                <n-button circle secondary size="small">
-                  <template #icon>
-                    <n-icon><SettingsOutline /></n-icon>
-                  </template>
-                </n-button>
-              </n-dropdown>
+              <div class="setting-btn-wrap">
+                <n-dropdown :options="menuOptions" @select="onMenuSelect" trigger="click" placement="bottom-end">
+                  <n-button circle secondary size="small">
+                    <template #icon>
+                      <n-icon><SettingsOutline /></n-icon>
+                    </template>
+                  </n-button>
+                </n-dropdown>
+                <span v-if="updaterModule.hasUpdate.value" class="update-badge-dot" />
+              </div>
             </div>
           </header>
 
@@ -387,7 +414,12 @@ onUnmounted(() => {
                   </svg>
                 </div>
                 <h3 class="about-name-modern" @click="openUrl('https://github.com/ISuuuu/miniserve-gui')">miniserve-gui</h3>
-                <n-tag :bordered="false" type="primary" size="small" round>v{{ appVersion || t('about.unknownVersion') }}</n-tag>
+                <div class="about-version-row">
+                  <n-tag :bordered="false" type="primary" size="small" round>v{{ appVersion || t('about.unknownVersion') }}</n-tag>
+                  <n-tag v-if="updaterModule.hasUpdate.value" :bordered="false" type="error" size="small" round class="new-version-tag">
+                    {{ t('about.newVersionAvailable', { version: updaterModule.availableUpdate.value?.version }) }}
+                  </n-tag>
+                </div>
               </div>
               <div class="about-body-modern">
                 <p class="about-desc">
@@ -400,6 +432,19 @@ onUnmounted(() => {
               </div>
               <div class="about-footer-modern">
                 <n-button
+                  v-if="updaterModule.hasUpdate.value"
+                  type="primary"
+                  size="small"
+                  :loading="updaterModule.checkingUpdate.value || updaterModule.updateDownloading.value"
+                  @click="updaterModule.checkForUpdates"
+                >
+                  <template #icon>
+                    <n-icon><DownloadOutline /></n-icon>
+                  </template>
+                  {{ t('about.updateNow') }}
+                </n-button>
+                <n-button
+                  v-else
                   type="primary"
                   ghost
                   size="small"
@@ -738,6 +783,69 @@ html, body {
   border-top: 1px solid var(--border-color);
   background: var(--bg-app);
   box-sizing: border-box;
+}
+
+/* 设置按钮小红点徽标 (参考 Yuumi 水晶呼吸动效) */
+.setting-btn-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.update-badge-dot {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 7px;
+  height: 7px;
+  background-color: #f43f5e;
+  border-radius: 50%;
+  border: 1.5px solid var(--bg-card);
+  box-shadow: 0 0 6px rgba(244, 63, 94, 0.8);
+  animation: badge-pulse 2s infinite ease-in-out;
+  pointer-events: none;
+}
+
+@keyframes badge-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.7);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 0 8px 2px rgba(244, 63, 94, 0.8);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0);
+  }
+}
+
+.menu-item-with-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 76px;
+}
+
+.menu-badge-dot {
+  width: 6px;
+  height: 6px;
+  background-color: #f43f5e;
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgba(244, 63, 94, 0.6);
+}
+
+.about-version-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.new-version-tag {
+  font-weight: 500;
 }
 </style>
 

@@ -10,6 +10,32 @@ interface UpdaterConfig {
   proxy: string | null;
 }
 
+export interface AvailableUpdateInfo {
+  version: string;
+  body?: string;
+  date?: string;
+}
+
+export function isNewerVersion(remote: string, current: string): boolean {
+  const cleanRemote = remote.replace(/^v/, "").trim();
+  const cleanCurrent = current.replace(/^v/, "").trim();
+  if (!cleanRemote || !cleanCurrent) return false;
+
+  const rMain = cleanRemote.split("-")[0];
+  const cMain = cleanCurrent.split("-")[0];
+
+  const rParts = rMain.split(".").map((n) => parseInt(n, 10) || 0);
+  const cParts = cMain.split(".").map((n) => parseInt(n, 10) || 0);
+  const maxLen = Math.max(rParts.length, cParts.length);
+  for (let i = 0; i < maxLen; i++) {
+    const r = rParts[i] ?? 0;
+    const c = cParts[i] ?? 0;
+    if (r > c) return true;
+    if (r < c) return false;
+  }
+  return false;
+}
+
 function getPlatform(): string {
   // @ts-ignore userAgentData is not in all TS lib versions
   const uaData = navigator.userAgentData;
@@ -43,6 +69,8 @@ export function useUpdater(
   const checkingUpdate = ref(false);
   const updateDownloading = ref(false);
   const updateProgress = ref(0);
+  const hasUpdate = ref(false);
+  const availableUpdate = ref<AvailableUpdateInfo | null>(null);
 
   /** Translate Rust error codes to user-facing i18n messages */
   function translateUpdateError(raw: string): string {
@@ -230,10 +258,19 @@ export function useUpdater(
       /^v/,
       "",
     );
-    if (!latestVersion || latestVersion === currentVersion) {
+    if (!latestVersion || !isNewerVersion(latestVersion, currentVersion)) {
+      hasUpdate.value = false;
+      availableUpdate.value = null;
       message.info(t("update.alreadyLatest"));
       return;
     }
+
+    hasUpdate.value = true;
+    availableUpdate.value = {
+      version: latestVersion,
+      body: updateJson?.notes || updateJson?.body || "",
+      date: updateJson?.pub_date || updateJson?.date || "",
+    };
 
     if (await handleUnsupportedPackage(latestVersion, packageType)) return;
 
@@ -281,7 +318,13 @@ export function useUpdater(
         }
       }
 
-      if (update) {
+      if (update && isNewerVersion(update.version, appVersion())) {
+        hasUpdate.value = true;
+        availableUpdate.value = {
+          version: update.version.replace(/^v/, ""),
+          body: update.body || "",
+          date: update.date || "",
+        };
         // Plugin updater found an update — NSIS uses native install with progress,
         // other package types fall through to manifest-based path
         if (await handleUnsupportedPackage(update.version, packageType))
@@ -313,10 +356,78 @@ export function useUpdater(
     }
   }
 
+  async function checkUpdateSilent(): Promise<boolean> {
+    try {
+      const currentVersion = appVersion().replace(/^v/, "").trim();
+      if (!currentVersion) return false;
+
+      const updaterConfig =
+        await invoke<UpdaterConfig>("get_updater_config");
+      const originalUrl = updaterConfig.endpoints[0] || "";
+
+      let remoteVersion = "";
+      let updateBody = "";
+      let updateDate = "";
+
+      try {
+        const { check } = await import("@tauri-apps/plugin-updater");
+        const checkOptions = updaterConfig.proxy
+          ? { proxy: updaterConfig.proxy }
+          : undefined;
+        const update = await Promise.race([
+          check(checkOptions),
+          new Promise<null>((_, reject) =>
+            setTimeout(() => reject(new Error("Timeout")), 5000),
+          ),
+        ]);
+        if (update?.version) {
+          remoteVersion = update.version;
+          updateBody = update.body || "";
+          updateDate = update.date || "";
+        }
+      } catch {
+        // 静默超时或失败，尝试 fallback
+      }
+
+      if (!remoteVersion && originalUrl) {
+        try {
+          const updateJson = await fetchUpdateManifest(originalUrl);
+          if (updateJson?.version) {
+            remoteVersion = updateJson.version;
+            updateBody = updateJson.notes || updateJson.body || "";
+            updateDate = updateJson.pub_date || updateJson.date || "";
+          }
+        } catch {
+          // 静默忽略
+        }
+      }
+
+      if (remoteVersion && isNewerVersion(remoteVersion, currentVersion)) {
+        hasUpdate.value = true;
+        availableUpdate.value = {
+          version: remoteVersion.replace(/^v/, ""),
+          body: updateBody,
+          date: updateDate,
+        };
+        return true;
+      } else if (remoteVersion) {
+        hasUpdate.value = false;
+        availableUpdate.value = null;
+      }
+      return false;
+    } catch (e) {
+      console.debug("[useUpdater] 静默检查更新失败:", e);
+      return false;
+    }
+  }
+
   return {
+    hasUpdate,
+    availableUpdate,
     checkingUpdate,
     updateDownloading,
     updateProgress,
     checkForUpdates,
+    checkUpdateSilent,
   };
 }

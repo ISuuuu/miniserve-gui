@@ -32,6 +32,8 @@ export default {
     version: 'v{version}',
     unknownVersion: '未知版本',
     checkUpdate: '检查软件更新',
+    updateNow: '立即更新',
+    newVersionAvailable: '发现新版本 v{version}',
     close: '关闭',
   },
   config: {

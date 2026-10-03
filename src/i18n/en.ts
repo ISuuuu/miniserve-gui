@@ -32,6 +32,8 @@ export default {
     version: 'v{version}',
     unknownVersion: 'Unknown Version',
     checkUpdate: 'Check for Updates',
+    updateNow: 'Update Now',
+    newVersionAvailable: 'New version v{version} available',
     close: 'Close',
   },
   config: {
