@@ -89,11 +89,23 @@ jobs:
             sed -i "0,/^version = .*/s//version = \"$V\"/" src-tauri/Cargo.toml
           fi
 
+          # 4. 更新 AppStream metainfo.xml (如果存在)
+          META_FILE="src-tauri/com.kim.miniserve-gui.metainfo.xml"
+          if [ -f "$META_FILE" ]; then
+            TODAY=$(date +%Y-%m-%d)
+            sed -i "s/<release version=\".*\" date=\".*\"\/>/<release version=\"$V\" date=\"$TODAY\"\/>/" "$META_FILE"
+          fi
+
       - name: Install dependencies (Linux only)
         if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev appstream
+
+      - name: Validate AppStream metainfo (Linux only)
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          appstreamcli validate --no-net src-tauri/com.kim.miniserve-gui.metainfo.xml
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4

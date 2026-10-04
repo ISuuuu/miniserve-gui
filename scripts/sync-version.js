@@ -19,6 +19,15 @@ try {
   
   // 写回文件
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+
+  // 更新 metainfo.xml (如果存在)
+  const metaPath = path.join(__dirname, '..', 'src-tauri', 'com.kim.miniserve-gui.metainfo.xml');
+  if (fs.existsSync(metaPath)) {
+    let metaContent = fs.readFileSync(metaPath, 'utf8');
+    const today = new Date().toISOString().slice(0, 10);
+    metaContent = metaContent.replace(/<release version=".*" date=".*"\/>/, `<release version="${version}" date="${today}"/>`);
+    fs.writeFileSync(metaPath, metaContent);
+  }
   
   console.log(`Version updated to ${version}`);
 } catch (e) {
